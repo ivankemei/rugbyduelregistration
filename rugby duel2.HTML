@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rugby Duel Ticket Registration</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #f5f5f5;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+        .container {
+            background: #fff;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            max-width: 400px;
+            width: 100%;
+        }
+        h2 {
+            text-align: center;
+            margin-bottom: 25px;
+            color: #1a237e;
+        }
+        input, select, button {
+            width: 100%;
+            padding: 12px;
+            margin: 8px 0;
+            border-radius: 6px;
+            border: 1px solid #ccc;
+        }
+        button {
+            background: #1a237e;
+            color: white;
+            font-weight: bold;
+            border: none;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #3949ab;
+        }
+        .message {
+            margin-top: 15px;
+            text-align: center;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>Rugby Duel Ticket</h2>
+    <form id="ticketForm">
+        <input type="text" name="fullname" placeholder="Full Name" required>
+        <input type="email" name="email" placeholder="Email Address" required>
+        <input type="tel" name="phone" placeholder="Phone Number (07xxxxxxxx)" required>
+        
+        <select name="ticket" required>
+            <option value="">Select Ticket Type</option>
+            <option value="800">Player Ticket - Ksh 800</option>
+            <option value="500">Spectator Ticket - Ksh 500</option>
+        </select>
+        
+        <button type="submit">Pay & Register</button>
+        <div class="message" id="message"></div>
+    </form>
+</div>
+
+<script>
+const form = document.getElementById("ticketForm");
+const messageDiv = document.getElementById("message");
+
+// CHANGE THIS to your Render server URL
+const API_URL = "https://rugby-duel.onrender.com/register";
+
+form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    messageDiv.textContent = "Processing payment...";
+
+    const formData = new FormData(form);
+    const data = {
+        fullname: formData.get("fullname"),
+        email: formData.get("email"),
+        phone: formData.get("phone"),
+        ticket: formData.get("ticket")
+    };
+
+    try {
+        const res = await fetch(API_URL, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(data)
+        });
+
+        const text = await res.text();
+        messageDiv.textContent = text;
+    } catch (err) {
+        console.error(err);
+        messageDiv.textContent = "Error connecting to server. Try again.";
+    }
+});
+</script>
+
+</body>
+</html>
