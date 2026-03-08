@@ -18,7 +18,7 @@ const PORT = process.env.PORT || 3000;
 const consumerKey = "WMIqR7H4yTbcpFwUtudit8OoFDzVd0XrAYx5BFShiX0UdZKV";
 const consumerSecret = "NzvROHYIG5PIDlw3LocL8Dh8uFYJaUwIAenBaOXLtDSQ0cA9aHhEmuqLBoww9JsU";
 const shortcode = "7677179";
-const passkey = "4cb92696ef3d16e754f85c0be0e807dba47c65e56629a8fb8290c66";
+const passkey = "4cb92696ef3d16e754f85c0be0e807dba47c65e56629a8f1dd726c8fb8290c66";
 
 // Update this to your Render domain
 const callbackURL = "https://rugbyduelregistration.onrender.com/callback";
@@ -147,4 +147,5 @@ app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
 
 });
+
 
