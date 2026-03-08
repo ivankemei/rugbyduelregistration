@@ -21,7 +21,7 @@ const shortcode = "7677179";
 const passkey = "4cb92696ef3d16e754f85c0be0e807dba47c65e56629a8fb8290c66";
 
 // Update this to your Render domain
-const callbackURL = "https://rugbyduel.onrender.com/callback";
+const callbackURL = "https://rugbyduelregistration.onrender.com/callback";
 
 // Temporary in-memory storage for pending payments
 let pendingPayments = {};
@@ -30,7 +30,7 @@ let pendingPayments = {};
 // Serve frontend form
 // =========================
 app.get("/", (req, res) => {
-    res.sendFile(path.join(__dirname, "index.html"));
+    res.sendFile(path.join(__dirname, "index.HTML"));
 });
 
 // =========================
@@ -145,4 +145,5 @@ app.post("/callback", async (req, res) => {
 // =========================
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
+
 });
