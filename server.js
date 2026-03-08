@@ -30,7 +30,7 @@ let pendingPayments = {};
 // Serve frontend form
 // =========================
 app.get("/", (req, res) => {
-    res.sendFile(path.join(__dirname, "index.HTML"));
+    res.sendFile(path.join(__dirname, "index.html"));
 });
 
 // =========================
@@ -147,3 +147,4 @@ app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
 
 });
+
