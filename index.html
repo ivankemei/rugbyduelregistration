@@ -156,7 +156,7 @@ to{transform:rotate(360deg)}
 
 <input type="email" name="email" placeholder="Email Address" required>
 
-<input type="tel" name="phone" placeholder="Phone Number (07xxxxxxxx)" required>
+<input type="tel" name="phone" placeholder="Phone Number (254xxxxxxxx)" required>
 
 <select name="ticket" required>
 <option value="">Select Ticket Type</option>
@@ -185,7 +185,7 @@ form.addEventListener("submit", async (e) => {
 e.preventDefault();
 
 button.classList.add("loading");
-messageDiv.textContent="Sending STK push... Check your phone";
+messageDiv.textContent="Check your phone to pay";
 
 const formData = new FormData(form);
 
@@ -223,5 +223,6 @@ button.classList.remove("loading");
 
 </body>
 </html>
+
 
 
