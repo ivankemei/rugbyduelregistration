@@ -1,0 +1,22 @@
+<script src="https://unpkg.com/html5-qrcode"></script>
+
+<div id="reader"></div>
+
+<script>
+function onScanSuccess(decodedText) {
+
+ fetch("/verify/" + decodedText)
+ .then(res=>res.json())
+ .then(data=>{
+
+  if(data.valid){
+    alert("Entry allowed for " + data.name)
+  }else{
+    alert("Invalid ticket")
+  }
+
+ })
+}
+
+new Html5QrcodeScanner("reader", { fps:10, qrbox:250 }).render(onScanSuccess)
+</script>
