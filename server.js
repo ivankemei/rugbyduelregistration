@@ -1,3 +1,6 @@
+
+
+
 const express = require("express");
 const axios = require("axios");
 const bodyParser = require("body-parser");
@@ -9,7 +12,7 @@ const app = express();
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
 
-// Use Render dynamic port or fallback to 3000 for local testing
+// Render dynamic port
 const PORT = process.env.PORT || 3000;
 
 // =========================
@@ -20,40 +23,58 @@ const consumerSecret = "NzvROHYIG5PIDlw3LocL8Dh8uFYJaUwIAenBaOXLtDSQ0cA9aHhEmuqL
 const shortcode = "7677179";
 const passkey = "4cb92696ef3d16e754f85c0be0e807dba47c65e56629a8f1dd726c8fb8290c66";
 
-// Update this to your Render domain
+// CALLBACK URL (Render public URL)
 const callbackURL = "https://rugbyduelregistration.onrender.com/callback";
 
-// Temporary in-memory storage for pending payments
+// Temporary storage
 let pendingPayments = {};
 
 // =========================
-// Serve frontend form
+// Serve Frontend
 // =========================
 app.get("/", (req, res) => {
     res.sendFile(path.join(__dirname, "index.html"));
 });
 
 // =========================
-// Get access token from Daraja
+// Get Access Token
 // =========================
 async function getAccessToken() {
     const auth = Buffer.from(`${consumerKey}:${consumerSecret}`).toString("base64");
+
     const response = await axios.get(
         "https://api.safaricom.co.ke/oauth/v1/generate?grant_type=client_credentials",
         { headers: { Authorization: `Basic ${auth}` } }
     );
+
     return response.data.access_token;
 }
 
 // =========================
-// Register and send STK Push
+// STK PUSH
 // =========================
 app.post("/register", async (req, res) => {
-    const { fullname, phone, email, ticket: amount } = req.body;
+
+    let { fullname, phone, email, ticket: amount } = req.body;
+
+    // FORMAT PHONE NUMBER
+    if (phone.startsWith("07")) {
+        phone = "254" + phone.substring(1);
+    }
+
+    if (phone.startsWith("+254")) {
+        phone = phone.substring(1);
+    }
 
     try {
+
         const token = await getAccessToken();
-        const timestamp = new Date().toISOString().replace(/[^0-9]/g, "").slice(0, -3);
+
+        const timestamp = new Date()
+            .toISOString()
+            .replace(/[^0-9]/g, "")
+            .slice(0, -3);
+
         const password = Buffer.from(shortcode + passkey + timestamp).toString("base64");
 
         const response = await axios.post(
@@ -71,45 +92,70 @@ app.post("/register", async (req, res) => {
                 AccountReference: "RugbyDuel",
                 TransactionDesc: "Ticket Payment"
             },
-            { headers: { Authorization: `Bearer ${token}` } }
+            {
+                headers: {
+                    Authorization: `Bearer ${token}`
+                }
+            }
         );
+
+        console.log("STK RESPONSE:", response.data);
 
         const checkoutID = response.data.CheckoutRequestID;
 
-        // Store user data temporarily
-        pendingPayments[checkoutID] = { fullname, phone, email, amount };
+        pendingPayments[checkoutID] = {
+            fullname,
+            phone,
+            email,
+            amount
+        };
 
-        res.json({ message: "STK Push sent. Check your phone and enter your M-Pesa PIN." });
+        res.json({
+            message: "STK Push sent. Check your phone and enter your M-Pesa PIN."
+        });
+
     } catch (error) {
-        console.error("STK Push error:", error.response?.data || error.message);
-        res.status(500).json({ message: "Payment failed. Try again." });
+
+        console.error("STK ERROR:", error.response?.data || error.message);
+
+        res.status(500).json({
+            message: "Payment failed. Check server logs."
+        });
+
     }
+
 });
 
 // =========================
-// Callback endpoint for Daraja
+// MPESA CALLBACK
 // =========================
 app.post("/callback", async (req, res) => {
-    const data = req.body.Body?.stkCallback;
-    if (!data) return res.status(400).json({ status: "invalid callback" });
 
-    const { CheckoutRequestID: checkoutID, ResultCode: resultCode } = data;
+    const data = req.body.Body?.stkCallback;
+
+    if (!data) return res.status(400).json({ status: "Invalid callback" });
+
+    const checkoutID = data.CheckoutRequestID;
+    const resultCode = data.ResultCode;
+
+    console.log("MPESA CALLBACK:", data);
 
     if (resultCode === 0) {
+
         const user = pendingPayments[checkoutID];
-        if (!user) return res.json({ status: "unknown user" });
+        if (!user) return res.json({ status: "User not found" });
 
         try {
-            // Generate ticket and QR code
-            const ticketID = `RUGBY-${Math.floor(Math.random() * 1000000)}`;
-            const qrCodeDataURL = await QRCode.toDataURL(ticketID);
 
-            // Send email with ticket
+            const ticketID = "RUGBY-" + Math.floor(Math.random() * 1000000);
+
+            const qr = await QRCode.toDataURL(ticketID);
+
             const transporter = nodemailer.createTransport({
                 service: "gmail",
                 auth: {
                     user: "ivankemei3@gmail.com",
-                    pass: "YOUR_GMAIL_APP_PASSWORD" // ⚠ Use App Password, NOT normal Gmail password
+                    pass: "YOUR_GMAIL_APP_PASSWORD"
                 }
             });
 
@@ -123,30 +169,32 @@ app.post("/callback", async (req, res) => {
                     <p>Ticket ID: ${ticketID}</p>
                     <p>Date: 18th April 2026</p>
                     <p>Venue: Eldoret Sports Club</p>
-                    <img src="${qrCodeDataURL}" />
+                    <img src="${qr}" />
                 `
             };
 
             await transporter.sendMail(mailOptions);
-            console.log(`Ticket sent to ${user.email}`);
 
-            // Remove from pending
+            console.log("Ticket sent to:", user.email);
+
             delete pendingPayments[checkoutID];
+
         } catch (err) {
-            console.error("Error sending email:", err.message);
+
+            console.error("Email error:", err.message);
+
         }
+
     }
 
     res.json({ status: "received" });
+
 });
 
 // =========================
-// Start server
+// START SERVER
 // =========================
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
-
 });
-
-
 
