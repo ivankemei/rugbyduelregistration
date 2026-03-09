@@ -98,7 +98,7 @@ app.post("/register", async (req, res) => {
         };
 
         res.json({
-            message: "STK Push sent. Check your phone and enter your M-Pesa PIN."
+            message: "Check your phone and enter your M-Pesa PIN."
         });
 
     } catch (error) {
@@ -271,4 +271,5 @@ app.get("/admin", (req, res) => {
 // =========================
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
+
 });
