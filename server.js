@@ -83,7 +83,7 @@ app.post("/register", async (req, res) => {
                 BusinessShortCode: shortcode,
                 Password: password,
                 Timestamp: timestamp,
-                TransactionType: "CustomerPayBillOnline",
+                TransactionType: "CustomerBuyGoodsOnline",
                 Amount: amount,
                 PartyA: phone,
                 PartyB: shortcode,
@@ -197,6 +197,7 @@ app.post("/callback", async (req, res) => {
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
 });
+
 
 
 
