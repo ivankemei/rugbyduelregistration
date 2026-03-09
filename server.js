@@ -20,7 +20,7 @@ const PORT = process.env.PORT || 3000;
 // =========================
 const consumerKey = "WMIqR7H4yTbcpFwUtudit8OoFDzVd0XrAYx5BFShiX0UdZKV";
 const consumerSecret = "NzvROHYIG5PIDlw3LocL8Dh8uFYJaUwIAenBaOXLtDSQ0cA9aHhEmuqLBoww9JsU";
-const shortcode = "7677179";
+const shortcode = "6691976";
 const passkey = "4cb92696ef3d16e754f85c0be0e807dba47c65e56629a8f1dd726c8fb8290c66";
 
 // CALLBACK URL (Render public URL)
@@ -197,6 +197,7 @@ app.post("/callback", async (req, res) => {
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
 });
+
 
 
 
