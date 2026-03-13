@@ -78,7 +78,7 @@ app.post("/register", async (req, res) => {
                 PartyB: "7677179",
                 PhoneNumber: phone,
                 CallBackURL: callbackURL,
-                AccountReference: "RugbyDuel",
+                AccountReference: "IVAN KIPLAGAT KEMEI",
                 TransactionDesc: "Ticket Payment"
             },
             {
