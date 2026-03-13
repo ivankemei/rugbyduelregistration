@@ -74,7 +74,7 @@ app.post("/register", async (req, res) => {
                 Timestamp: timestamp,
                 TransactionType: "CustomerBuyGoodsOnline",
                 Amount: amount,
-                PartyA: phone,
+                PartyA: 0757584726,
                 PartyB: "7677179",
                 PhoneNumber: phone,
                 CallBackURL: callbackURL,
