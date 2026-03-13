@@ -69,13 +69,13 @@ app.post("/register", async (req, res) => {
         const response = await axios.post(
             "https://api.safaricom.co.ke/mpesa/stkpush/v1/processrequest",
             {
-                BusinessShortCode: shortcode,
+                BusinessShortCode: "7677179",
                 Password: password,
                 Timestamp: timestamp,
                 TransactionType: "CustomerBuyGoodsOnline",
                 Amount: amount,
                 PartyA: phone,
-                PartyB: shortcode,
+                PartyB: "7677179",
                 PhoneNumber: phone,
                 CallBackURL: callbackURL,
                 AccountReference: "RugbyDuel",
