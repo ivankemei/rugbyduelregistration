@@ -1,5 +1,4 @@
 <!DOCTYPE html>
-
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -7,7 +6,6 @@
 <title>Rugby Duel Ticket Registration</title>
 
 <style>
-
 *{
 margin:0;
 padding:0;
@@ -25,7 +23,6 @@ overflow:hidden;
 }
 
 /* floating background animation */
-
 body::before{
 content:"";
 position:absolute;
@@ -55,14 +52,8 @@ z-index:1;
 }
 
 @keyframes fadeIn{
-from{
-opacity:0;
-transform:translateY(30px);
-}
-to{
-opacity:1;
-transform:translateY(0);
-}
+from{opacity:0; transform:translateY(30px);}
+to{opacity:1; transform:translateY(0);}
 }
 
 h2{
@@ -116,8 +107,13 @@ color:#1a237e;
 min-height:20px;
 }
 
-/* loading animation */
+.price{
+margin-top:5px;
+font-weight:bold;
+color:#2c5364;
+}
 
+/* loading animation */
 .loading{
 pointer-events:none;
 opacity:0.8;
@@ -139,7 +135,6 @@ vertical-align:middle;
 @keyframes spin{
 to{transform:rotate(360deg)}
 }
-
 </style>
 
 </head>
@@ -156,13 +151,16 @@ to{transform:rotate(360deg)}
 
 <input type="email" name="email" placeholder="Email Address" required>
 
-<input type="tel" name="phone" placeholder="Phone Number (254xxxxxxxx)" required>
+<input type="tel" name="phone" placeholder="Phone Number (07xxxxxxxx)" required>
 
-<select name="ticket" required>
+<!-- ✅ UPDATED: Ticket type instead of price -->
+<select name="ticket" id="ticketSelect" required>
 <option value="">Select Ticket Type</option>
-<option value="1000">Player Ticket - Ksh 1000</option>
-<option value="50">Spectator Ticket - Ksh 50</option>
+<option value="player">Player Ticket - Ksh 1000</option>
+<option value="spectator">Spectator Ticket - Ksh 50</option>
 </select>
+
+<p class="price" id="priceDisplay"></p>
 
 <button type="submit" id="payBtn">Pay & Register</button>
 
@@ -177,15 +175,34 @@ to{transform:rotate(360deg)}
 const form = document.getElementById("ticketForm");
 const messageDiv = document.getElementById("message");
 const button = document.getElementById("payBtn");
+const ticketSelect = document.getElementById("ticketSelect");
+const priceDisplay = document.getElementById("priceDisplay");
 
 const API_URL = "/register";
+
+// ✅ Price mapping (UI only)
+const prices = {
+player: 1000,
+spectator: 50
+};
+
+// Show price when selected
+ticketSelect.addEventListener("change", () => {
+const selected = ticketSelect.value;
+
+if(prices[selected]){
+priceDisplay.textContent = "Price: Ksh " + prices[selected];
+}else{
+priceDisplay.textContent = "";
+}
+});
 
 form.addEventListener("submit", async (e) => {
 
 e.preventDefault();
 
 button.classList.add("loading");
-messageDiv.textContent="Check your phone to pay";
+messageDiv.textContent="Sending STK push... Check your phone";
 
 const formData = new FormData(form);
 
@@ -193,7 +210,7 @@ const data = {
 fullname: formData.get("fullname"),
 email: formData.get("email"),
 phone: formData.get("phone"),
-ticket: formData.get("ticket")
+ticket: formData.get("ticket") // now sends type, not price
 };
 
 try{
@@ -204,9 +221,10 @@ headers:{"Content-Type":"application/json"},
 body:JSON.stringify(data)
 });
 
-const text = await res.text();
+// ✅ FIXED: handle JSON response
+const result = await res.json();
 
-messageDiv.textContent = text;
+messageDiv.textContent = result.message;
 
 }catch(err){
 
@@ -223,6 +241,3 @@ button.classList.remove("loading");
 
 </body>
 </html>
-
-
-
