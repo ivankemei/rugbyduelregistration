@@ -147,7 +147,7 @@ app.post("/callback", async (req, res) => {
                 service: "gmail",
                 auth: {
                     user: "ivankemei3@gmail.com",
-                    pass: "YOUR_GMAIL_APP_PASSWORD"
+                    pass: "yjzx rltb qjle wchc"
                 }
             });
 
