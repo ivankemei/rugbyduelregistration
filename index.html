@@ -6,158 +6,49 @@
 <title>Rugby Duel Ticket Registration</title>
 
 <style>
-*{
-margin:0;
-padding:0;
-box-sizing:border-box;
-font-family:Arial, Helvetica, sans-serif;
-}
+*{margin:0;padding:0;box-sizing:border-box;font-family:Arial, Helvetica, sans-serif;}
+body{height:100vh;display:flex;justify-content:center;align-items:center;background: linear-gradient(135deg,#0f2027,#203a43,#2c5364);overflow:hidden;}
+body::before{content:"";position:absolute;width:200%;height:200%;background: radial-gradient(circle,#ffffff22 1px, transparent 1px);background-size:40px 40px;animation: moveBg 40s linear infinite;}
+@keyframes moveBg{0%{transform:translate(0,0)}100%{transform:translate(-200px,-200px)}}
 
-body{
-height:100vh;
-display:flex;
-justify-content:center;
-align-items:center;
-background: linear-gradient(135deg,#0f2027,#203a43,#2c5364);
-overflow:hidden;
-}
-
-/* floating background animation */
-body::before{
-content:"";
-position:absolute;
-width:200%;
-height:200%;
-background: radial-gradient(circle,#ffffff22 1px, transparent 1px);
-background-size:40px 40px;
-animation: moveBg 40s linear infinite;
-}
-
-@keyframes moveBg{
-0%{transform:translate(0,0)}
-100%{transform:translate(-200px,-200px)}
-}
-
-.container{
-background:white;
-padding:35px;
-border-radius:14px;
-box-shadow:0 10px 35px rgba(0,0,0,0.3);
-max-width:420px;
-width:90%;
-text-align:center;
-animation:fadeIn 1s ease;
-position:relative;
-z-index:1;
-}
-
-@keyframes fadeIn{
-from{opacity:0; transform:translateY(30px);}
-to{opacity:1; transform:translateY(0);}
-}
-
-h2{
-margin-bottom:20px;
-color:#1a237e;
-}
-
-input,select{
-width:100%;
-padding:12px;
-margin:10px 0;
-border-radius:6px;
-border:1px solid #ccc;
-transition:0.3s;
-font-size:15px;
-}
-
-input:focus,select:focus{
-border-color:#3949ab;
-outline:none;
-box-shadow:0 0 5px rgba(57,73,171,0.4);
-}
-
-button{
-width:100%;
-padding:13px;
-border:none;
-border-radius:6px;
-background:linear-gradient(45deg,#1a237e,#3949ab);
-color:white;
-font-weight:bold;
-font-size:15px;
-cursor:pointer;
-transition:0.3s;
-position:relative;
-}
-
-button:hover{
-transform:translateY(-2px);
-box-shadow:0 6px 15px rgba(0,0,0,0.25);
-}
-
-button:active{
-transform:scale(0.98);
-}
-
-.message{
-margin-top:15px;
-font-weight:bold;
-color:#1a237e;
-min-height:20px;
-}
-
-.price{
-margin-top:5px;
-font-weight:bold;
-color:#2c5364;
-}
-
-/* loading animation */
-.loading{
-pointer-events:none;
-opacity:0.8;
-}
-
-.loading::after{
-content:"";
-width:18px;
-height:18px;
-border:3px solid #fff;
-border-top:3px solid transparent;
-border-radius:50%;
-display:inline-block;
-margin-left:10px;
-animation:spin 1s linear infinite;
-vertical-align:middle;
-}
-
-@keyframes spin{
-to{transform:rotate(360deg)}
-}
+.container{background:white;padding:35px;border-radius:14px;box-shadow:0 10px 35px rgba(0,0,0,0.3);max-width:420px;width:90%;text-align:center;animation:fadeIn 1s ease;position:relative;z-index:1;}
+@keyframes fadeIn{from{opacity:0; transform:translateY(30px);} to{opacity:1; transform:translateY(0);}}
+h2{margin-bottom:20px;color:#1a237e;}
+input,select{width:100%;padding:12px;margin:10px 0;border-radius:6px;border:1px solid #ccc;transition:0.3s;font-size:15px;}
+input:focus,select:focus{border-color:#3949ab;outline:none;box-shadow:0 0 5px rgba(57,73,171,0.4);}
+button{width:100%;padding:13px;border:none;border-radius:6px;background:linear-gradient(45deg,#1a237e,#3949ab);color:white;font-weight:bold;font-size:15px;cursor:pointer;transition:0.3s;position:relative;}
+button:hover{transform:translateY(-2px);box-shadow:0 6px 15px rgba(0,0,0,0.25);}
+button:active{transform:scale(0.98);}
+.message{margin-top:15px;font-weight:bold;color:#1a237e;min-height:20px;}
+.price{margin-top:5px;font-weight:bold;color:#2c5364;}
+.loading{pointer-events:none;opacity:0.8;}
+.loading::after{content:"";width:18px;height:18px;border:3px solid #fff;border-top:3px solid transparent;border-radius:50%;display:inline-block;margin-left:10px;animation:spin 1s linear infinite;vertical-align:middle;}
+@keyframes spin{to{transform:rotate(360deg);}}
+.ticket-card{border:1px solid #ccc;border-radius:10px;padding:15px;margin-top:20px;}
+.ticket-card img{max-width:150px;margin:10px 0;}
+.ticket-card a{display:inline-block;margin-top:10px;padding:8px 15px;background:#3949ab;color:white;text-decoration:none;border-radius:5px;}
 </style>
 
 </head>
 
 <body>
 
-<div class="container">
+<div class="container" id="container">
 
 <h2>🏉 Rugby Duel Ticket</h2>
 
 <form id="ticketForm">
 
 <input type="text" name="fullname" placeholder="Full Name" required>
-
 <input type="email" name="email" placeholder="Email Address" required>
-
 <input type="tel" name="phone" placeholder="Phone Number (07xxxxxxxx)" required>
 
-<!-- ✅ UPDATED: Ticket type instead of price -->
+<!-- ✅ Split 1v1 into two categories -->
 <select name="ticket" id="ticketSelect" required>
 <option value="">Select Ticket Type</option>
-<option value="1000">Player Ticket - Ksh 1000</option>
-<option value="50">Spectator Ticket - Ksh 50</option>
+<option value="skill_showcase">1v1 - Skill Showcase - Ksh 1000</option>
+<option value="head_to_head">1v1 - Head to Head Contact - Ksh 1000</option>
+<option value="spectator">Spectator Ticket - Ksh 50</option>
 </select>
 
 <p class="price" id="priceDisplay"></p>
@@ -171,38 +62,34 @@ to{transform:rotate(360deg)}
 </div>
 
 <script>
-
 const form = document.getElementById("ticketForm");
 const messageDiv = document.getElementById("message");
 const button = document.getElementById("payBtn");
 const ticketSelect = document.getElementById("ticketSelect");
 const priceDisplay = document.getElementById("priceDisplay");
+const container = document.getElementById("container");
 
 const API_URL = "/register";
 
-// ✅ Price mapping (UI only)
+// Ticket type to price mapping
 const prices = {
-player: 1000,
+skill_showcase: 1000,
+head_to_head: 1000,
 spectator: 50
 };
 
-// Show price when selected
+// Show price dynamically
 ticketSelect.addEventListener("change", () => {
 const selected = ticketSelect.value;
-
-if(prices[selected]){
-priceDisplay.textContent = "Price: Ksh " + prices[selected];
-}else{
-priceDisplay.textContent = "";
-}
+priceDisplay.textContent = prices[selected] ? "Price: Ksh " + prices[selected] : "";
 });
 
+// Handle form submission
 form.addEventListener("submit", async (e) => {
-
 e.preventDefault();
 
 button.classList.add("loading");
-messageDiv.textContent="Sending STK push... Check your phone";
+messageDiv.textContent="Payment in progress... Check your phone";
 
 const formData = new FormData(form);
 
@@ -210,33 +97,62 @@ const data = {
 fullname: formData.get("fullname"),
 email: formData.get("email"),
 phone: formData.get("phone"),
-ticket: formData.get("ticket") // now sends type, not price
+ticket: formData.get("ticket")
 };
 
-try{
+// Hide form, show progress
+form.style.display = "none";
+messageDiv.textContent = "Payment in progress... ⏳";
 
+try {
 const res = await fetch(API_URL,{
 method:"POST",
 headers:{"Content-Type":"application/json"},
 body:JSON.stringify(data)
 });
 
-// ✅ FIXED: handle JSON response
 const result = await res.json();
 
-messageDiv.textContent = result.message;
+// Simulate waiting for payment confirmation
+messageDiv.textContent = "Awaiting confirmation...";
+
+// ✅ Poll backend every 3 seconds for payment status (simplified demo)
+const poll = setInterval(async () => {
+try{
+const ticketResponse = await fetch(`/ticket_status?email=${data.email}`);
+const ticketData = await ticketResponse.json();
+if(ticketData.status === "paid"){
+clearInterval(poll);
+showTicket(ticketData.ticket);
+}
+}catch(err){
+console.error(err);
+}
+}, 3000);
 
 }catch(err){
-
 console.error(err);
 messageDiv.textContent="⚠ Server connection error";
-
-}
-
 button.classList.remove("loading");
-
+form.style.display = "block";
+}
+button.classList.remove("loading");
 });
 
+// Display ticket dynamically
+function showTicket(ticket){
+messageDiv.textContent = "✅ Payment Successful!";
+container.innerHTML = `
+<h2>🎟️ Your Ticket</h2>
+<div class="ticket-card">
+<p><b>Name:</b> ${ticket.name}</p>
+<p><b>Ticket ID:</b> ${ticket.id}</p>
+<p><b>Category:</b> ${ticket.category}</p>
+<img src="${ticket.qr}" alt="Ticket QR"/>
+<a href="${ticket.qr}" download="RugbyDuelTicket-${ticket.id}.png">Download Ticket</a>
+</div>
+`;
+}
 </script>
 
 </body>
