@@ -60,7 +60,7 @@ app.post("/register", async (req, res) => {
     const ticketPrices = {
         skill_showcase: 1000,
         head_to_head: 1000,
-        spectator: 50
+        spectator: 500
     };
     const amount = ticketPrices[ticketType] || 50;
 
