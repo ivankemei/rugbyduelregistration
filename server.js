@@ -75,7 +75,7 @@ app.post("/register", async (req, res) => {
                 TransactionType: "CustomerBuyGoodsOnline",
                 Amount: amount,
                 PartyA: 0757584726,
-                PartyB: "7677179",
+                PartyB: "6691976",
                 PhoneNumber: phone,
                 CallBackURL: callbackURL,
                 AccountReference: "IVAN KIPLAGAT KEMEI",
