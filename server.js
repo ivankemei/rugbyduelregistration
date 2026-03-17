@@ -12,7 +12,7 @@ app.use(bodyParser.json());
 const PORT = process.env.PORT || 3000;
 
 // =========================
-// MPESA DARAJA CREDENTIALS
+// MPESA DARAJA CREDENTIALS (UNCHANGED)
 // =========================
 const consumerKey = "WMIqR7H4yTbcpFwUtudit8OoFDzVd0XrAYx5BFShiX0UdZKV";
 const consumerSecret = "NzvROHYIG5PIDlw3LocL8Dh8uFYJaUwIAenBaOXLtDSQ0cA9aHhEmuqLBoww9JsU";
@@ -21,22 +21,23 @@ const passkey = "4cb92696ef3d16e754f85c0be0e807dba47c65e56629a8f1dd726c8fb8290c6
 
 const callbackURL = "https://rugbyduelregistration.onrender.com/callback";
 
-// Temporary memory storage
+// =========================
+// TEMP STORAGE
+// =========================
 let pendingPayments = {};
 let issuedTickets = {};
 
 // =========================
-// Serve Frontend
+// SERVE FRONTEND
 // =========================
 app.get("/", (req, res) => {
     res.sendFile(path.join(__dirname, "index.html"));
 });
 
 // =========================
-// Access Token
+// GET ACCESS TOKEN
 // =========================
 async function getAccessToken() {
-
     const auth = Buffer.from(`${consumerKey}:${consumerSecret}`).toString("base64");
 
     const response = await axios.get(
@@ -45,7 +46,6 @@ async function getAccessToken() {
     );
 
     return response.data.access_token;
-
 }
 
 // =========================
@@ -63,18 +63,17 @@ app.post("/register", async (req, res) => {
         const token = await getAccessToken();
 
         const timestamp = new Date().toISOString().replace(/[^0-9]/g, "").slice(0, -3);
-
         const password = Buffer.from(shortcode + passkey + timestamp).toString("base64");
 
         const response = await axios.post(
             "https://api.safaricom.co.ke/mpesa/stkpush/v1/processrequest",
             {
-                BusinessShortCode: "7677179",
+                BusinessShortCode: shortcode,
                 Password: password,
                 Timestamp: timestamp,
                 TransactionType: "CustomerBuyGoodsOnline",
                 Amount: amount,
-                PartyA: 0757584726,
+                PartyA: phone,
                 PartyB: "6691976",
                 PhoneNumber: phone,
                 CallBackURL: callbackURL,
@@ -86,7 +85,7 @@ app.post("/register", async (req, res) => {
             }
         );
 
-        console.log("STK RESPONSE:", response.data);
+        console.log("📤 STK RESPONSE:", response.data);
 
         const checkoutID = response.data.CheckoutRequestID;
 
@@ -103,7 +102,7 @@ app.post("/register", async (req, res) => {
 
     } catch (error) {
 
-        console.error("STK ERROR:", error.response?.data || error.message);
+        console.error("❌ STK ERROR:", error.response?.data || error.message);
 
         res.status(500).json({
             message: "Payment failed."
@@ -114,31 +113,68 @@ app.post("/register", async (req, res) => {
 });
 
 // =========================
-// MPESA CALLBACK
+// MPESA CALLBACK (UPDATED)
 // =========================
 app.post("/callback", async (req, res) => {
 
-    const data = req.body.Body?.stkCallback;
+    try {
 
-    if (!data) return res.status(400).json({ status: "Invalid callback" });
+        const callback = req.body?.Body?.stkCallback;
 
-    const checkoutID = data.CheckoutRequestID;
-    const resultCode = data.ResultCode;
+        if (!callback) {
+            console.log("❌ Invalid callback:", req.body);
+            return res.status(400).json({ status: "Invalid callback" });
+        }
 
-    console.log("MPESA CALLBACK:", data);
+        console.log("📩 MPESA CALLBACK:", callback);
 
-    if (resultCode === 0) {
+        const checkoutID = callback.CheckoutRequestID;
+        const resultCode = callback.ResultCode;
+        const resultDesc = callback.ResultDesc;
 
+        // =========================
+        // FAILED PAYMENT
+        // =========================
+        if (resultCode !== 0) {
+
+            console.log("❌ Payment Failed:", resultDesc);
+
+            delete pendingPayments[checkoutID];
+
+            return res.json({ status: "failed" });
+        }
+
+        // =========================
+        // SUCCESSFUL PAYMENT
+        // =========================
         const user = pendingPayments[checkoutID];
-        if (!user) return res.json({ status: "User not found" });
+
+        if (!user) {
+            console.log("⚠️ User not found:", checkoutID);
+            return res.json({ status: "user_not_found" });
+        }
+
+        let amount = 0;
+        let receipt = "N/A";
+
+        const metadata = callback.CallbackMetadata?.Item || [];
+
+        metadata.forEach(item => {
+            if (item.Name === "Amount") amount = item.Value;
+            if (item.Name === "MpesaReceiptNumber") receipt = item.Value;
+        });
+
+        console.log("✅ Payment Success:", { amount, receipt });
 
         try {
 
-            const ticketID = "RUGBY-" + Math.floor(Math.random() * 1000000);
+            const ticketID = "RUGBY-" + Date.now();
 
             issuedTickets[ticketID] = {
                 name: user.fullname,
-                used: false
+                used: false,
+                amount,
+                phone: user.phone
             };
 
             const qr = await QRCode.toDataURL(ticketID);
@@ -154,38 +190,51 @@ app.post("/callback", async (req, res) => {
             const mailOptions = {
                 from: "ivankemei3@gmail.com",
                 to: user.email,
-                subject: "Your Rugby Duel Ticket",
+                subject: "🎟️ Your Rugby Duel Ticket",
                 html: `
-                    <h2>Rugby Duel Ticket</h2>
-                    <p>Name: ${user.fullname}</p>
-                    <p>Ticket ID: ${ticketID}</p>
-                    <p>Date: 18th April 2026</p>
-                    <p>Venue: Eldoret Sports Club</p>
+                    <h2>🏉 Rugby Duel Ticket</h2>
+                    <p><b>Name:</b> ${user.fullname}</p>
+                    <p><b>Ticket ID:</b> ${ticketID}</p>
+                    <p><b>Amount Paid:</b> Ksh ${amount}</p>
+                    <p><b>M-Pesa Receipt:</b> ${receipt}</p>
+                    <p><b>Date:</b> 18th April 2026</p>
+                    <p><b>Venue:</b> Eldoret Sports Club</p>
+                    <br/>
                     <img src="${qr}" />
-                    <p>View ticket: https://rugbyduelregistration.onrender.com/ticket/${ticketID}</p>
+                    <br/>
+                    <p>
+                        <a href="https://rugbyduelregistration.onrender.com/ticket/${ticketID}">
+                        View Your Ticket
+                        </a>
+                    </p>
                 `
             };
 
             await transporter.sendMail(mailOptions);
 
-            console.log("Ticket sent to:", user.email);
+            console.log("📧 Ticket sent to:", user.email);
 
             delete pendingPayments[checkoutID];
 
         } catch (err) {
 
-            console.error("Email error:", err.message);
+            console.error("❌ Email/Ticket Error:", err.message);
 
         }
 
-    }
+        res.json({ status: "success" });
 
-    res.json({ status: "received" });
+    } catch (error) {
+
+        console.error("❌ Callback Error:", error.message);
+
+        res.json({ status: "error" });
+    }
 
 });
 
 // =========================
-// VIEW TICKET PAGE
+// VIEW TICKET
 // =========================
 app.get("/ticket/:id", async (req, res) => {
 
@@ -206,12 +255,11 @@ app.get("/ticket/:id", async (req, res) => {
 });
 
 // =========================
-// VERIFY TICKET (QR SCAN)
+// VERIFY (QR SCAN)
 // =========================
 app.get("/verify/:ticketID", (req, res) => {
 
     const ticketID = req.params.ticketID;
-
     const ticket = issuedTickets[ticketID];
 
     if (!ticket) {
@@ -249,7 +297,6 @@ app.get("/admin", (req, res) => {
             <td>${ticket.used ? "USED" : "VALID"}</td>
         </tr>
         `;
-
     }
 
     res.send(`
@@ -270,7 +317,5 @@ app.get("/admin", (req, res) => {
 // START SERVER
 // =========================
 app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
-
+    console.log(`🚀 Server running on port ${PORT}`);
 });
-
