@@ -26,8 +26,8 @@ const callbackURL = "https://rugbyduelregistration.onrender.com/callback";
 // =========================
 // TEMP STORAGE
 // =========================
-let pendingPayments = {}; // { checkoutID: { fullname, phone, email, ticketType } }
-let issuedTickets = {};   // { ticketID: { name, email, used, category, amount, receipt, pdfPath } }
+let pendingPayments = {}; // { checkoutID: { fullname, phone, email, ticketType, amount } }
+let issuedTickets = {};   // { ticketID: { name, email, used, category, amount, receipt, pdfPath, qr } }
 
 // =========================
 // SERVE FRONTEND
@@ -92,7 +92,6 @@ app.post("/register", async (req, res) => {
         console.log("📤 STK RESPONSE:", response.data);
 
         res.json({ message: "Check your phone and enter your M-Pesa PIN." });
-
     } catch (error) {
         console.error("❌ STK ERROR:", error.response?.data || error.message);
         res.status(500).json({ message: "Payment failed." });
@@ -126,23 +125,35 @@ app.post("/callback", async (req, res) => {
         const ticketID = "RUGBY-" + Date.now();
         const qrData = await QRCode.toDataURL(ticketID);
 
-        // Generate PDF ticket
-        const pdfPath = path.join(__dirname, "tickets", `${ticketID}.pdf`);
-        if (!fs.existsSync(path.join(__dirname, "tickets"))) fs.mkdirSync(path.join(__dirname, "tickets"));
+        // Generate PDF ticket with appealing style
+        const pdfDir = path.join(__dirname, "tickets");
+        if (!fs.existsSync(pdfDir)) fs.mkdirSync(pdfDir);
 
+        const pdfPath = path.join(pdfDir, `${ticketID}.pdf`);
         const doc = new PDFDocument({ size: 'A4', margin: 50 });
         doc.pipe(fs.createWriteStream(pdfPath));
-        doc.fontSize(22).text("🏉 Rugby Duel Ticket", { align: "center" });
-        doc.moveDown();
-        doc.fontSize(16).text(`Name: ${user.fullname}`);
+
+        // Background color
+        doc.rect(0, 0, doc.page.width, doc.page.height).fill('#f5f5f5');
+        doc.fillColor('#1a237e');
+
+        // Header
+        doc.fontSize(28).fillColor('#3949ab').text("🏉 Rugby Duel Ticket", { align: "center" });
+        doc.moveDown(1);
+
+        // Ticket info box
+        doc.roundedRect(50, doc.y, 500, 300, 10).fill('#e3f2fd').stroke();
+        doc.fillColor('#0d47a1').fontSize(16).text(`Name: ${user.fullname}`, 70, doc.y + 10);
         doc.text(`Ticket ID: ${ticketID}`);
         doc.text(`Category: ${user.ticketType}`);
         doc.text(`Amount Paid: Ksh ${user.amount}`);
         doc.text(`M-Pesa Receipt: ${receipt}`);
         doc.text(`Date: 18th April 2026`);
         doc.text(`Venue: Eldoret Sports Club`);
-        doc.moveDown();
-        doc.image(qrData, { fit: [200, 200], align: "center" });
+        doc.moveDown(2);
+
+        // QR code
+        doc.image(qrData, doc.page.width / 2 - 75, doc.y, { fit: [150, 150], align: 'center' });
         doc.end();
 
         issuedTickets[ticketID] = {
@@ -152,7 +163,8 @@ app.post("/callback", async (req, res) => {
             category: user.ticketType,
             amount: user.amount,
             receipt,
-            pdfPath
+            pdfPath,
+            qr: qrData
         };
 
         // Send email with PDF attachment
@@ -166,7 +178,8 @@ app.post("/callback", async (req, res) => {
                 from: "ivankemei3@gmail.com",
                 to: user.email,
                 subject: "🎟️ Your Rugby Duel Ticket",
-                html: `<h2>🏉 Rugby Duel Ticket</h2><p>Hi ${user.fullname}, attached is your ticket.</p>`,
+                html: `<h2>🏉 Rugby Duel Ticket</h2>
+                       <p>Hi ${user.fullname}, attached is your ticket. Show this at the venue.</p>`,
                 attachments: [{ filename: `${ticketID}.pdf`, path: pdfPath }]
             });
             console.log("📧 Ticket sent to:", user.email);
@@ -191,7 +204,7 @@ app.get("/ticket_status", (req, res) => {
         const [id, t] = ticketEntry;
         return res.json({
             status: "paid",
-            ticket: { id, name: t.name, category: t.category, amount: t.amount }
+            ticket: { id, name: t.name, category: t.category, amount: t.amount, qr: t.qr }
         });
     }
     res.json({ status: "pending" });
