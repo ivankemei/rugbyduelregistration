@@ -4,6 +4,8 @@ const bodyParser = require("body-parser");
 const QRCode = require("qrcode");
 const nodemailer = require("nodemailer");
 const path = require("path");
+const PDFDocument = require("pdfkit");
+const fs = require("fs");
 
 const app = express();
 app.use(bodyParser.urlencoded({ extended: true }));
@@ -24,8 +26,8 @@ const callbackURL = "https://rugbyduelregistration.onrender.com/callback";
 // =========================
 // TEMP STORAGE
 // =========================
-let pendingPayments = {}; // { checkoutID: { fullname, phone, email, ticket } }
-let issuedTickets = {};   // { ticketID: { name, email, used, qr, category } }
+let pendingPayments = {}; // { checkoutID: { fullname, phone, email, ticketType } }
+let issuedTickets = {};   // { ticketID: { name, email, used, category, amount, receipt, pdfPath } }
 
 // =========================
 // SERVE FRONTEND
@@ -55,7 +57,6 @@ app.post("/register", async (req, res) => {
     if (phone.startsWith("07")) phone = "254" + phone.substring(1);
     if (phone.startsWith("+254")) phone = phone.substring(1);
 
-    // Ticket type -> amount mapping
     const ticketPrices = {
         skill_showcase: 1000,
         head_to_head: 1000,
@@ -87,9 +88,7 @@ app.post("/register", async (req, res) => {
         );
 
         const checkoutID = response.data.CheckoutRequestID;
-
-        pendingPayments[checkoutID] = { fullname, phone, email, ticketType };
-
+        pendingPayments[checkoutID] = { fullname, phone, email, ticketType, amount };
         console.log("📤 STK RESPONSE:", response.data);
 
         res.json({ message: "Check your phone and enter your M-Pesa PIN." });
@@ -106,13 +105,7 @@ app.post("/register", async (req, res) => {
 app.post("/callback", async (req, res) => {
     try {
         const callback = req.body?.Body?.stkCallback;
-
-        if (!callback) {
-            console.log("❌ Invalid callback:", req.body);
-            return res.status(400).json({ status: "Invalid callback" });
-        }
-
-        console.log("📩 MPESA CALLBACK:", callback);
+        if (!callback) return res.status(400).json({ status: "Invalid callback" });
 
         const checkoutID = callback.CheckoutRequestID;
         const resultCode = callback.ResultCode;
@@ -125,62 +118,59 @@ app.post("/callback", async (req, res) => {
         }
 
         const user = pendingPayments[checkoutID];
-        if (!user) {
-            console.log("⚠️ User not found:", checkoutID);
-            return res.json({ status: "user_not_found" });
-        }
+        if (!user) return res.json({ status: "user_not_found" });
 
-        let amount = 0;
         let receipt = "N/A";
-        metadata.forEach(item => {
-            if (item.Name === "Amount") amount = item.Value;
-            if (item.Name === "MpesaReceiptNumber") receipt = item.Value;
-        });
+        metadata.forEach(item => { if(item.Name==="MpesaReceiptNumber") receipt=item.Value; });
 
         const ticketID = "RUGBY-" + Date.now();
-        const qr = await QRCode.toDataURL(ticketID);
+        const qrData = await QRCode.toDataURL(ticketID);
+
+        // Generate PDF ticket
+        const pdfPath = path.join(__dirname, "tickets", `${ticketID}.pdf`);
+        if (!fs.existsSync(path.join(__dirname, "tickets"))) fs.mkdirSync(path.join(__dirname, "tickets"));
+
+        const doc = new PDFDocument({ size: 'A4', margin: 50 });
+        doc.pipe(fs.createWriteStream(pdfPath));
+        doc.fontSize(22).text("🏉 Rugby Duel Ticket", { align: "center" });
+        doc.moveDown();
+        doc.fontSize(16).text(`Name: ${user.fullname}`);
+        doc.text(`Ticket ID: ${ticketID}`);
+        doc.text(`Category: ${user.ticketType}`);
+        doc.text(`Amount Paid: Ksh ${user.amount}`);
+        doc.text(`M-Pesa Receipt: ${receipt}`);
+        doc.text(`Date: 18th April 2026`);
+        doc.text(`Venue: Eldoret Sports Club`);
+        doc.moveDown();
+        doc.image(qrData, { fit: [200, 200], align: "center" });
+        doc.end();
 
         issuedTickets[ticketID] = {
             name: user.fullname,
             email: user.email,
             used: false,
-            qr,
             category: user.ticketType,
-            amount,
-            receipt
+            amount: user.amount,
+            receipt,
+            pdfPath
         };
 
-        // Send ticket via email
+        // Send email with PDF attachment
         try {
             const transporter = nodemailer.createTransport({
                 service: "gmail",
-                auth: {
-                    user: "ivankemei3@gmail.com",
-                    pass: "yjzx rltb qjle wchc"
-                }
+                auth: { user: "ivankemei3@gmail.com", pass: "yjzx rltb qjle wchc" }
             });
 
             await transporter.sendMail({
                 from: "ivankemei3@gmail.com",
                 to: user.email,
                 subject: "🎟️ Your Rugby Duel Ticket",
-                html: `
-                    <h2>🏉 Rugby Duel Ticket</h2>
-                    <p><b>Name:</b> ${user.fullname}</p>
-                    <p><b>Ticket ID:</b> ${ticketID}</p>
-                    <p><b>Category:</b> ${user.ticketType}</p>
-                    <p><b>Amount Paid:</b> Ksh ${amount}</p>
-                    <p><b>Receipt:</b> ${receipt}</p>
-                    <p><b>Date:</b> 18th April 2026</p>
-                    <p><b>Venue:</b> Eldoret Sports Club</p>
-                    <img src="${qr}" />
-                    <p><a href="https://rugbyduelregistration.onrender.com/ticket/${ticketID}">View Your Ticket</a></p>
-                `
+                html: `<h2>🏉 Rugby Duel Ticket</h2><p>Hi ${user.fullname}, attached is your ticket.</p>`,
+                attachments: [{ filename: `${ticketID}.pdf`, path: pdfPath }]
             });
             console.log("📧 Ticket sent to:", user.email);
-        } catch (err) {
-            console.error("❌ Email Error:", err.message);
-        }
+        } catch (err) { console.error("❌ Email Error:", err.message); }
 
         delete pendingPayments[checkoutID];
         res.json({ status: "success" });
@@ -192,48 +182,54 @@ app.post("/callback", async (req, res) => {
 });
 
 // =========================
-// TICKET STATUS ENDPOINT (frontend polling)
+// TICKET STATUS (frontend polls)
 // =========================
 app.get("/ticket_status", (req, res) => {
     const email = req.query.email;
-    const ticket = Object.entries(issuedTickets).find(([id, t]) => t.email === email);
-    if (ticket) {
-        const [id, t] = ticket;
+    const ticketEntry = Object.entries(issuedTickets).find(([id, t]) => t.email === email);
+    if (ticketEntry) {
+        const [id, t] = ticketEntry;
         return res.json({
             status: "paid",
-            ticket: {
-                id,
-                name: t.name,
-                qr: t.qr,
-                category: t.category,
-                amount: t.amount
-            }
+            ticket: { id, name: t.name, category: t.category, amount: t.amount }
         });
     }
     res.json({ status: "pending" });
 });
 
 // =========================
-// VIEW TICKET
+// VIEW TICKET (web page)
 // =========================
-app.get("/ticket/:id", async (req, res) => {
+app.get("/ticket/:id", (req, res) => {
     const ticketID = req.params.id;
-    const ticket = issuedTickets[ticketID];
-    if (!ticket) return res.send("Ticket not found");
+    const t = issuedTickets[ticketID];
+    if (!t) return res.send("Ticket not found");
+
     res.send(`
         <h1>🏉 Rugby Duel Ticket</h1>
         <p>Ticket ID: ${ticketID}</p>
-        <p>Category: ${ticket.category}</p>
-        <img src="${ticket.qr}" />
+        <p>Name: ${t.name}</p>
+        <p>Category: ${t.category}</p>
+        <p>Amount Paid: Ksh ${t.amount}</p>
+        <a href="/download/${ticketID}" download>📥 Download PDF</a>
+        <br/><img src="${t.qr}" />
     `);
 });
 
 // =========================
-// VERIFY (QR SCAN)
+// DOWNLOAD PDF TICKET
+// =========================
+app.get("/download/:id", (req, res) => {
+    const t = issuedTickets[req.params.id];
+    if (!t) return res.send("Ticket not found");
+    res.download(t.pdfPath);
+});
+
+// =========================
+// VERIFY TICKET (QR scan)
 // =========================
 app.get("/verify/:ticketID", (req, res) => {
-    const ticketID = req.params.ticketID;
-    const ticket = issuedTickets[ticketID];
+    const ticket = issuedTickets[req.params.ticketID];
     if (!ticket) return res.json({ valid: false, message: "Invalid ticket" });
     if (ticket.used) return res.json({ valid: false, message: "Ticket already used" });
     ticket.used = true;
@@ -252,8 +248,8 @@ app.get("/admin", (req, res) => {
     res.send(`
         <h1>Rugby Duel Admin</h1>
         <table border="1">
-        <tr><th>Ticket</th><th>Name</th><th>Status</th></tr>
-        ${rows}
+            <tr><th>Ticket</th><th>Name</th><th>Status</th></tr>
+            ${rows}
         </table>
     `);
 });
@@ -261,6 +257,4 @@ app.get("/admin", (req, res) => {
 // =========================
 // START SERVER
 // =========================
-app.listen(PORT, () => {
-    console.log(`🚀 Server running on port ${PORT}`);
-});
+app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
