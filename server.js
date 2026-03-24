@@ -117,7 +117,7 @@ app.post("/register", async (req, res) => {
 });
 
 // =========================
-// CALLBACK (PROPERLY FIXED)
+// CALLBACK (FULLY FIXED)
 // =========================
 app.post("/callback", async (req, res) => {
 
@@ -125,62 +125,49 @@ app.post("/callback", async (req, res) => {
 
         const callback = req.body?.Body?.stkCallback;
 
-        if (!callback) {
-            console.log("Invalid callback");
-            return res.json({ status: "invalid" });
-        }
-
-        console.log("Callback received:", callback);
+        if (!callback) return res.json({ status: "invalid" });
 
         const checkoutID = callback.CheckoutRequestID;
         const resultCode = callback.ResultCode;
-        const resultDesc = callback.ResultDesc;
 
-        // =========================
-        // ❌ FAIL / CANCEL
-        // =========================
+        console.log("Callback:", callback);
+
+        // ❌ FAIL OR CANCEL
         if (resultCode !== 0) {
-            console.log("Payment failed:", resultDesc);
+            console.log("Payment cancelled or failed");
             delete pendingPayments[checkoutID];
             return res.json({ status: "failed" });
         }
 
-        // =========================
-        // ❌ NO METADATA = CANCELLED
-        // =========================
+        // ❌ MUST HAVE METADATA
         if (!callback.CallbackMetadata) {
-            console.log("No metadata -> cancelled");
+            console.log("No metadata - rejected");
             delete pendingPayments[checkoutID];
             return res.json({ status: "failed" });
         }
 
-        const user = pendingPayments[checkoutID];
-
-        if (!user) {
-            console.log("User not found");
-            return res.json({ status: "user_not_found" });
-        }
+        const metadata = callback.CallbackMetadata.Item || [];
 
         let receipt = null;
         let amount = null;
-
-        const metadata = callback.CallbackMetadata.Item || [];
 
         metadata.forEach(item => {
             if (item.Name === "MpesaReceiptNumber") receipt = item.Value;
             if (item.Name === "Amount") amount = item.Value;
         });
 
-        // =========================
-        // ❌ FINAL SAFETY CHECK
-        // =========================
+        // ❌ STRICT VALIDATION
         if (!receipt || !amount) {
-            console.log("Missing receipt or amount -> rejected");
+            console.log("Invalid payment data");
             delete pendingPayments[checkoutID];
-            return res.json({ status: "invalid_payment" });
+            return res.json({ status: "failed" });
         }
 
-        console.log("Valid payment:", receipt);
+        const user = pendingPayments[checkoutID];
+
+        if (!user) return res.json({ status: "user_not_found" });
+
+        console.log("Valid payment confirmed:", receipt);
 
         // =========================
         // CREATE TICKET
@@ -194,9 +181,10 @@ app.post("/callback", async (req, res) => {
         const pdfPath = path.join(dir, `${ticketID}.pdf`);
 
         const doc = new PDFDocument({ size: "A4" });
-        doc.pipe(fs.createWriteStream(pdfPath));
+        const stream = fs.createWriteStream(pdfPath);
 
-        // Background
+        doc.pipe(stream);
+
         doc.rect(0, 0, doc.page.width, doc.page.height).fill("#f0f4ff");
 
         doc.fillColor("#1a237e").fontSize(26).text("RUGBY DUEL TICKET", { align: "center" });
@@ -221,47 +209,60 @@ app.post("/callback", async (req, res) => {
 
         doc.end();
 
-        issuedTickets[ticketID] = {
-            name: user.fullname,
-            email: user.email,
-            used: false,
-            category: user.ticketType,
-            amount,
-            receipt,
-            pdfPath,
-            qr
-        };
+        // ✅ WAIT FOR PDF TO FINISH
+        stream.on("finish", async () => {
 
-        // =========================
-        // SEND EMAIL
-        // =========================
-        const transporter = nodemailer.createTransport({
-            service: "gmail",
-            auth: {
-                user: "ivankemei3@gmail.com",
-                pass: "yjzx rltb qjle wchc"
+            issuedTickets[ticketID] = {
+                name: user.fullname,
+                email: user.email,
+                used: false,
+                category: user.ticketType,
+                amount,
+                receipt,
+                pdfPath,
+                qr
+            };
+
+            // =========================
+            // SEND EMAIL
+            // =========================
+            try {
+
+                const transporter = nodemailer.createTransport({
+                    service: "gmail",
+                    auth: {
+                        user: "ivankemei3@gmail.com",
+                        pass: "yjzx rltb qjle wchc"
+                    }
+                });
+
+                await transporter.sendMail({
+                    from: "ivankemei3@gmail.com",
+                    to: user.email,
+                    subject: "Your Rugby Duel Ticket",
+                    html: `
+                        <h2>Your Ticket is Ready</h2>
+                        <p>Name: ${user.fullname}</p>
+                        <p>Ticket ID: ${ticketID}</p>
+                        <p>Category: ${user.ticketType}</p>
+                    `,
+                    attachments: [
+                        {
+                            filename: `${ticketID}.pdf`,
+                            path: pdfPath
+                        }
+                    ]
+                });
+
+                console.log("Email sent successfully");
+
+            } catch (emailErr) {
+                console.error("Email Error:", emailErr.message);
             }
-        });
 
-        await transporter.sendMail({
-            from: "ivankemei3@gmail.com",
-            to: user.email,
-            subject: "Your Rugby Duel Ticket",
-            html: `
-                <h2>Your Ticket is Ready</h2>
-                <p>Name: ${user.fullname}</p>
-                <p>Ticket ID: ${ticketID}</p>
-                <p>Category: ${user.ticketType}</p>
-            `,
-            attachments: [
-                {
-                    filename: `${ticketID}.pdf`,
-                    path: pdfPath
-                }
-            ]
-        });
+            delete pendingPayments[checkoutID];
 
-        delete pendingPayments[checkoutID];
+        });
 
         res.json({ status: "success" });
 
