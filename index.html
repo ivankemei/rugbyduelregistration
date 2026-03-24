@@ -61,6 +61,7 @@ button:active{transform:scale(0.98);}
 </div>
 
 <script>
+<script>
 const form = document.getElementById("ticketForm");
 const messageDiv = document.getElementById("message");
 const button = document.getElementById("payBtn");
@@ -88,7 +89,7 @@ form.addEventListener("submit", async (e) => {
   e.preventDefault();
 
   button.classList.add("loading");
-  messageDiv.textContent="Payment in progress... Check your phone";
+  messageDiv.textContent = "Payment in progress... Check your phone";
 
   const formData = new FormData(form);
   const data = {
@@ -112,23 +113,34 @@ form.addEventListener("submit", async (e) => {
 
     messageDiv.textContent = "Awaiting M-Pesa confirmation... ⏳";
 
-    // Poll backend every 3 seconds for payment status
+    // Poll backend every 3 seconds
     const poll = setInterval(async () => {
-      try{
+      try {
         const ticketResponse = await fetch(`/ticket_status?email=${data.email}`);
         const ticketData = await ticketResponse.json();
-        if(ticketData.status === "paid"){
+
+        // ✅ SUCCESS
+        if (ticketData.status === "paid") {
           clearInterval(poll);
           showTicket(ticketData.ticket);
         }
-      }catch(err){
+
+        // ❌ CANCELLED / FAILED (YOUR FIX)
+        if (ticketData.status === "failed") {
+          clearInterval(poll);
+          messageDiv.textContent = "Payment Cancelled. Try again.";
+          form.style.display = "block";
+          button.classList.remove("loading");
+        }
+
+      } catch (err) {
         console.error(err);
       }
     }, 3000);
 
-  }catch(err){
+  } catch (err) {
     console.error(err);
-    messageDiv.textContent="⚠ Server connection error";
+    messageDiv.textContent = "Server connection error";
     button.classList.remove("loading");
     form.style.display = "block";
   }
@@ -138,15 +150,15 @@ form.addEventListener("submit", async (e) => {
 
 // Display ticket dynamically
 function showTicket(ticket){
-  messageDiv.textContent = "✅ Payment Successful!";
+  messageDiv.textContent = "Payment Successful!";
   container.innerHTML = `
-    <h2>🎟️ Your Ticket</h2>
+    <h2>Your Ticket</h2>
     <div class="ticket-card">
       <p><b>Name:</b> ${ticket.name}</p>
       <p><b>Ticket ID:</b> ${ticket.id}</p>
       <p><b>Category:</b> ${ticket.category}</p>
       <p><b>Amount Paid:</b> Ksh ${ticket.amount}</p>
-      <a href="/download/${ticket.id}" download="RugbyDuelTicket-${ticket.id}.pdf">📥 Download PDF Ticket</a>
+      <a href="/download/${ticket.id}" download="RugbyDuelTicket-${ticket.id}.pdf">Download PDF Ticket</a>
     </div>
   `;
 }
