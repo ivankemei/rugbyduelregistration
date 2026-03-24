@@ -16,16 +16,12 @@ body::before{content:"";position:absolute;width:200%;height:200%;background: rad
 h2{margin-bottom:20px;color:#1a237e;}
 input,select{width:100%;padding:12px;margin:10px 0;border-radius:6px;border:1px solid #ccc;transition:0.3s;font-size:15px;}
 input:focus,select:focus{border-color:#3949ab;outline:none;box-shadow:0 0 5px rgba(57,73,171,0.4);}
-button{width:100%;padding:13px;border:none;border-radius:6px;background:linear-gradient(45deg,#1a237e,#3949ab);color:white;font-weight:bold;font-size:15px;cursor:pointer;transition:0.3s;position:relative;}
+button{width:100%;padding:13px;border:none;border-radius:6px;background:linear-gradient(45deg,#1a237e,#3949ab);color:white;font-weight:bold;font-size:15px;cursor:pointer;transition:0.3s;}
 button:hover{transform:translateY(-2px);box-shadow:0 6px 15px rgba(0,0,0,0.25);}
-button:active{transform:scale(0.98);}
 .message{margin-top:15px;font-weight:bold;color:#1a237e;min-height:20px;}
 .price{margin-top:5px;font-weight:bold;color:#2c5364;}
 .loading{pointer-events:none;opacity:0.8;}
-.loading::after{content:"";width:18px;height:18px;border:3px solid #fff;border-top:3px solid transparent;border-radius:50%;display:inline-block;margin-left:10px;animation:spin 1s linear infinite;vertical-align:middle;}
-@keyframes spin{to{transform:rotate(360deg);}}
 .ticket-card{border:1px solid #ccc;border-radius:10px;padding:15px;margin-top:20px;text-align:left;}
-.ticket-card img{max-width:150px;margin:10px 0;display:block;}
 .ticket-card a{display:inline-block;margin-top:10px;padding:8px 15px;background:#3949ab;color:white;text-decoration:none;border-radius:5px;}
 </style>
 
@@ -35,7 +31,7 @@ button:active{transform:scale(0.98);}
 
 <div class="container" id="container">
 
-<h2>🏉 Rugby Duel Ticket</h2>
+<h2>Rugby Duel Ticket</h2>
 
 <form id="ticketForm">
 
@@ -66,29 +62,26 @@ const messageDiv = document.getElementById("message");
 const button = document.getElementById("payBtn");
 const ticketSelect = document.getElementById("ticketSelect");
 const priceDisplay = document.getElementById("priceDisplay");
-const container = document.getElementById("container");
 
-const API_URL = "/register";
-
-// Ticket type to price mapping
 const prices = {
   skill_showcase: 1000,
   head_to_head: 1000,
-  spectator: 500
+  spectator: 5
 };
 
-// Show price dynamically
+// Show price
 ticketSelect.addEventListener("change", () => {
   const selected = ticketSelect.value;
   priceDisplay.textContent = prices[selected] ? "Price: Ksh " + prices[selected] : "";
 });
 
-// Handle form submission
+// Submit
 form.addEventListener("submit", async (e) => {
   e.preventDefault();
 
   button.classList.add("loading");
-  messageDiv.textContent="Payment in progress... Check your phone";
+  form.style.display = "none";
+  messageDiv.textContent = "Sending STK push...";
 
   const formData = new FormData(form);
   const data = {
@@ -98,62 +91,74 @@ form.addEventListener("submit", async (e) => {
     ticket: formData.get("ticket")
   };
 
-  form.style.display = "none";
-  messageDiv.textContent = "Payment in progress... ⏳";
-
   try {
-    const res = await fetch(API_URL,{
+    await fetch("/register", {
       method:"POST",
       headers:{"Content-Type":"application/json"},
       body:JSON.stringify(data)
     });
 
-    const result = await res.json();
+    messageDiv.textContent = "Waiting for M-Pesa confirmation...";
 
-    messageDiv.textContent = "Awaiting M-Pesa confirmation... ⏳";
+    let attempts = 0;
 
-    // Poll backend every 3 seconds for payment status
     const poll = setInterval(async () => {
-      try{
-        const ticketResponse = await fetch(`/ticket_status?email=${data.email}`);
-        const ticketData = await ticketResponse.json();
-        if(ticketData.status === "paid"){
+      attempts++;
+
+      try {
+        const res = await fetch(`/ticket_status?email=${data.email}`);
+        const ticketData = await res.json();
+
+        // ✅ SUCCESS
+        if (ticketData.status === "paid") {
           clearInterval(poll);
           showTicket(ticketData.ticket);
         }
-      }catch(err){
+
+        // ❌ CANCELLED / FAILED
+        if (ticketData.status === "failed") {
+          clearInterval(poll);
+          messageDiv.textContent = "Payment cancelled. Try again.";
+          form.style.display = "block";
+          button.classList.remove("loading");
+        }
+
+        // ⏱ TIMEOUT (60 seconds)
+        if (attempts > 20) {
+          clearInterval(poll);
+          messageDiv.textContent = "Session expired. Try again.";
+          form.style.display = "block";
+          button.classList.remove("loading");
+        }
+
+      } catch (err) {
         console.error(err);
       }
+
     }, 3000);
 
-  }catch(err){
+  } catch (err) {
     console.error(err);
-    messageDiv.textContent="⚠ Server connection error";
-    button.classList.remove("loading");
+    messageDiv.textContent = "Server error. Try again.";
     form.style.display = "block";
+    button.classList.remove("loading");
   }
-
-  button.classList.remove("loading");
 });
 
-// Display ticket dynamically
+// Show ticket
 function showTicket(ticket){
-  messageDiv.textContent = "✅ Payment Successful!";
-  container.innerHTML = `
-    <h2>🎟️ Your Ticket</h2>
+  document.getElementById("container").innerHTML = `
+    <h2>Your Ticket</h2>
     <div class="ticket-card">
       <p><b>Name:</b> ${ticket.name}</p>
       <p><b>Ticket ID:</b> ${ticket.id}</p>
       <p><b>Category:</b> ${ticket.category}</p>
       <p><b>Amount Paid:</b> Ksh ${ticket.amount}</p>
-      <a href="/download/${ticket.id}" download="RugbyDuelTicket-${ticket.id}.pdf">📥 Download PDF Ticket</a>
+      <a href="/download/${ticket.id}">Download Ticket</a>
     </div>
   `;
 }
 </script>
-
-</body>
-</html>
 
 </body>
 </html>
