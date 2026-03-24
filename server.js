@@ -35,10 +35,12 @@ app.get("/", (req, res) => {
 // =========================
 async function getAccessToken() {
     const auth = Buffer.from(`${consumerKey}:${consumerSecret}`).toString("base64");
+
     const response = await axios.get(
         "https://api.safaricom.co.ke/oauth/v1/generate?grant_type=client_credentials",
         { headers: { Authorization: `Basic ${auth}` } }
     );
+
     return response.data.access_token;
 }
 
@@ -63,7 +65,9 @@ app.post("/register", async (req, res) => {
     try {
 
         const token = await getAccessToken();
+
         const timestamp = new Date().toISOString().replace(/[^0-9]/g, "").slice(0, -3);
+
         const password = Buffer.from(shortcode + passkey + timestamp).toString("base64");
 
         const response = await axios.post(
@@ -81,7 +85,9 @@ app.post("/register", async (req, res) => {
                 AccountReference: "RUGBY DUEL",
                 TransactionDesc: "Ticket Payment"
             },
-            { headers: { Authorization: `Bearer ${token}` } }
+            {
+                headers: { Authorization: `Bearer ${token}` }
+            }
         );
 
         const checkoutID = response.data.CheckoutRequestID;
@@ -94,89 +100,133 @@ app.post("/register", async (req, res) => {
             amount
         };
 
-        res.json({ message: "Check your phone and enter your M-Pesa PIN." });
+        res.json({
+            message: "Check your phone and enter your M-Pesa PIN."
+        });
 
     } catch (error) {
+
         console.error("STK ERROR:", error.response?.data || error.message);
-        res.status(500).json({ message: "Payment failed." });
+
+        res.status(500).json({
+            message: "Payment failed."
+        });
+
     }
+
 });
 
 // =========================
-// CALLBACK (FIXED)
+// CALLBACK (PROPERLY FIXED)
 // =========================
 app.post("/callback", async (req, res) => {
 
     try {
 
         const callback = req.body?.Body?.stkCallback;
-        if (!callback) return res.json({ status: "invalid" });
+
+        if (!callback) {
+            console.log("Invalid callback");
+            return res.json({ status: "invalid" });
+        }
+
+        console.log("Callback received:", callback);
 
         const checkoutID = callback.CheckoutRequestID;
         const resultCode = callback.ResultCode;
+        const resultDesc = callback.ResultDesc;
 
-        // ❌ STOP if cancelled or failed
+        // =========================
+        // ❌ FAIL / CANCEL
+        // =========================
         if (resultCode !== 0) {
-            console.log("Payment cancelled or failed");
+            console.log("Payment failed:", resultDesc);
+            delete pendingPayments[checkoutID];
+            return res.json({ status: "failed" });
+        }
+
+        // =========================
+        // ❌ NO METADATA = CANCELLED
+        // =========================
+        if (!callback.CallbackMetadata) {
+            console.log("No metadata -> cancelled");
             delete pendingPayments[checkoutID];
             return res.json({ status: "failed" });
         }
 
         const user = pendingPayments[checkoutID];
-        if (!user) return res.json({ status: "user_not_found" });
 
-        let receipt = "N/A";
-        const metadata = callback.CallbackMetadata?.Item || [];
+        if (!user) {
+            console.log("User not found");
+            return res.json({ status: "user_not_found" });
+        }
+
+        let receipt = null;
+        let amount = null;
+
+        const metadata = callback.CallbackMetadata.Item || [];
 
         metadata.forEach(item => {
-            if (item.Name === "MpesaReceiptNumber") {
-                receipt = item.Value;
-            }
+            if (item.Name === "MpesaReceiptNumber") receipt = item.Value;
+            if (item.Name === "Amount") amount = item.Value;
         });
 
+        // =========================
+        // ❌ FINAL SAFETY CHECK
+        // =========================
+        if (!receipt || !amount) {
+            console.log("Missing receipt or amount -> rejected");
+            delete pendingPayments[checkoutID];
+            return res.json({ status: "invalid_payment" });
+        }
+
+        console.log("Valid payment:", receipt);
+
+        // =========================
+        // CREATE TICKET
+        // =========================
         const ticketID = "RUGBY-" + Date.now();
         const qr = await QRCode.toDataURL(ticketID);
 
-        // =========================
-        // CREATE PDF
-        // =========================
         const dir = path.join(__dirname, "tickets");
         if (!fs.existsSync(dir)) fs.mkdirSync(dir);
 
         const pdfPath = path.join(dir, `${ticketID}.pdf`);
-        const doc = new PDFDocument({ size: "A4" });
 
+        const doc = new PDFDocument({ size: "A4" });
         doc.pipe(fs.createWriteStream(pdfPath));
 
         // Background
         doc.rect(0, 0, doc.page.width, doc.page.height).fill("#f0f4ff");
 
         doc.fillColor("#1a237e").fontSize(26).text("RUGBY DUEL TICKET", { align: "center" });
+
         doc.moveDown();
 
         doc.fillColor("#000").fontSize(16);
         doc.text(`Name: ${user.fullname}`);
         doc.text(`Ticket ID: ${ticketID}`);
         doc.text(`Category: ${user.ticketType}`);
-        doc.text(`Amount: Ksh ${user.amount}`);
+        doc.text(`Amount: Ksh ${amount}`);
         doc.text(`Receipt: ${receipt}`);
         doc.text(`Date: 18 April 2026`);
         doc.text(`Venue: Eldoret Sports Club`);
 
         doc.moveDown();
-        doc.image(qr, { fit: [150, 150], align: "center" });
+
+        doc.image(qr, {
+            fit: [150, 150],
+            align: "center"
+        });
 
         doc.end();
 
-        // =========================
-        // SAVE
-        // =========================
         issuedTickets[ticketID] = {
             name: user.fullname,
             email: user.email,
             used: false,
             category: user.ticketType,
-            amount: user.amount,
+            amount,
             receipt,
             pdfPath,
             qr
@@ -202,7 +252,6 @@ app.post("/callback", async (req, res) => {
                 <p>Name: ${user.fullname}</p>
                 <p>Ticket ID: ${ticketID}</p>
                 <p>Category: ${user.ticketType}</p>
-                <p>Download attached ticket</p>
             `,
             attachments: [
                 {
@@ -217,21 +266,27 @@ app.post("/callback", async (req, res) => {
         res.json({ status: "success" });
 
     } catch (err) {
+
         console.error("Callback Error:", err.message);
+
         res.json({ status: "error" });
+
     }
+
 });
 
 // =========================
 // STATUS
 // =========================
 app.get("/ticket_status", (req, res) => {
+
     const email = req.query.email;
 
     const entry = Object.entries(issuedTickets).find(([id, t]) => t.email === email);
 
     if (entry) {
         const [id, t] = entry;
+
         return res.json({
             status: "paid",
             ticket: {
@@ -245,13 +300,18 @@ app.get("/ticket_status", (req, res) => {
     }
 
     res.json({ status: "pending" });
+
 });
 
 // =========================
 app.get("/download/:id", (req, res) => {
+
     const t = issuedTickets[req.params.id];
+
     if (!t) return res.send("Not found");
+
     res.download(t.pdfPath);
+
 });
 
 // =========================
