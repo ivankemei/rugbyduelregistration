@@ -26,6 +26,7 @@ const callbackURL = "https://rugbyduelregistration.onrender.com/callback";
 // =========================
 let pendingPayments = {};
 let issuedTickets = {};
+let failedPayments = {}; // ✅ NEW
 
 // =========================
 app.get("/", (req, res) => {
@@ -65,9 +66,7 @@ app.post("/register", async (req, res) => {
     try {
 
         const token = await getAccessToken();
-
         const timestamp = new Date().toISOString().replace(/[^0-9]/g, "").slice(0, -3);
-
         const password = Buffer.from(shortcode + passkey + timestamp).toString("base64");
 
         const response = await axios.post(
@@ -100,48 +99,45 @@ app.post("/register", async (req, res) => {
             amount
         };
 
-        res.json({
-            message: "Check your phone and enter your M-Pesa PIN."
-        });
+        res.json({ message: "Check your phone and enter your M-Pesa PIN." });
 
     } catch (error) {
-
         console.error("STK ERROR:", error.response?.data || error.message);
-
-        res.status(500).json({
-            message: "Payment failed."
-        });
-
+        res.status(500).json({ message: "Payment failed." });
     }
 
 });
 
 // =========================
-// CALLBACK (FULLY FIXED)
+// CALLBACK
 // =========================
 app.post("/callback", async (req, res) => {
 
     try {
 
         const callback = req.body?.Body?.stkCallback;
-
         if (!callback) return res.json({ status: "invalid" });
 
         const checkoutID = callback.CheckoutRequestID;
         const resultCode = callback.ResultCode;
 
-        console.log("Callback:", callback);
+        const user = pendingPayments[checkoutID];
 
         // ❌ FAIL OR CANCEL
         if (resultCode !== 0) {
             console.log("Payment cancelled or failed");
+
+            if (user) {
+                failedPayments[user.email] = true; // ✅ mark failed
+            }
+
             delete pendingPayments[checkoutID];
             return res.json({ status: "failed" });
         }
 
         // ❌ MUST HAVE METADATA
         if (!callback.CallbackMetadata) {
-            console.log("No metadata - rejected");
+            if (user) failedPayments[user.email] = true;
             delete pendingPayments[checkoutID];
             return res.json({ status: "failed" });
         }
@@ -156,18 +152,13 @@ app.post("/callback", async (req, res) => {
             if (item.Name === "Amount") amount = item.Value;
         });
 
-        // ❌ STRICT VALIDATION
         if (!receipt || !amount) {
-            console.log("Invalid payment data");
+            if (user) failedPayments[user.email] = true;
             delete pendingPayments[checkoutID];
             return res.json({ status: "failed" });
         }
 
-        const user = pendingPayments[checkoutID];
-
         if (!user) return res.json({ status: "user_not_found" });
-
-        console.log("Valid payment confirmed:", receipt);
 
         // =========================
         // CREATE TICKET
@@ -202,14 +193,10 @@ app.post("/callback", async (req, res) => {
 
         doc.moveDown();
 
-        doc.image(qr, {
-            fit: [150, 150],
-            align: "center"
-        });
+        doc.image(qr, { fit: [150, 150], align: "center" });
 
         doc.end();
 
-        // ✅ WAIT FOR PDF TO FINISH
         stream.on("finish", async () => {
 
             issuedTickets[ticketID] = {
@@ -223,11 +210,8 @@ app.post("/callback", async (req, res) => {
                 qr
             };
 
-            // =========================
-            // SEND EMAIL
-            // =========================
+            // EMAIL
             try {
-
                 const transporter = nodemailer.createTransport({
                     service: "gmail",
                     auth: {
@@ -240,49 +224,40 @@ app.post("/callback", async (req, res) => {
                     from: "ivankemei3@gmail.com",
                     to: user.email,
                     subject: "Your Rugby Duel Ticket",
-                    html: `
-                        <h2>Your Ticket is Ready</h2>
-                        <p>Name: ${user.fullname}</p>
-                        <p>Ticket ID: ${ticketID}</p>
-                        <p>Category: ${user.ticketType}</p>
-                    `,
-                    attachments: [
-                        {
-                            filename: `${ticketID}.pdf`,
-                            path: pdfPath
-                        }
-                    ]
+                    html: `<h2>Your Ticket is Ready</h2>`,
+                    attachments: [{ filename: `${ticketID}.pdf`, path: pdfPath }]
                 });
 
-                console.log("Email sent successfully");
-
-            } catch (emailErr) {
-                console.error("Email Error:", emailErr.message);
+            } catch (err) {
+                console.error("Email error:", err.message);
             }
 
             delete pendingPayments[checkoutID];
-
         });
 
         res.json({ status: "success" });
 
     } catch (err) {
-
         console.error("Callback Error:", err.message);
-
         res.json({ status: "error" });
-
     }
 
 });
 
 // =========================
-// STATUS
+// STATUS (FIXED)
 // =========================
 app.get("/ticket_status", (req, res) => {
 
     const email = req.query.email;
 
+    // ❌ FAILED
+    if (failedPayments[email]) {
+        delete failedPayments[email]; // reset after showing once
+        return res.json({ status: "failed" });
+    }
+
+    // ✅ PAID
     const entry = Object.entries(issuedTickets).find(([id, t]) => t.email === email);
 
     if (entry) {
@@ -305,13 +280,36 @@ app.get("/ticket_status", (req, res) => {
 });
 
 // =========================
+// DOWNLOAD
+// =========================
 app.get("/download/:id", (req, res) => {
-
     const t = issuedTickets[req.params.id];
-
     if (!t) return res.send("Not found");
-
     res.download(t.pdfPath);
+});
+
+// =========================
+// QR SCAN GATE SYSTEM
+// =========================
+app.get("/verify/:ticketID", (req, res) => {
+
+    const ticket = issuedTickets[req.params.ticketID];
+
+    if (!ticket) {
+        return res.json({ valid: false, message: "Invalid Ticket" });
+    }
+
+    if (ticket.used) {
+        return res.json({ valid: false, message: "Already Used" });
+    }
+
+    ticket.used = true;
+
+    res.json({
+        valid: true,
+        name: ticket.name,
+        category: ticket.category
+    });
 
 });
 
