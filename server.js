@@ -1,3 +1,5 @@
+require("dotenv").config();
+
 const express = require("express");
 const axios = require("axios");
 const bodyParser = require("body-parser");
@@ -14,19 +16,18 @@ app.use(bodyParser.json());
 const PORT = process.env.PORT || 3000;
 
 // =========================
-// MPESA CREDENTIALS (UNCHANGED)
+// ENV VARIABLES
 // =========================
-const consumerKey = "WMIqR7H4yTbcpFwUtudit8OoFDzVd0XrAYx5BFShiX0UdZKV";
-const consumerSecret = "NzvROHYIG5PIDlw3LocL8Dh8uFYJaUwIAenBaOXLtDSQ0cA9aHhEmuqLBoww9JsU";
-const shortcode = "7677179";
-const passkey = "4cb92696ef3d16e754f85c0be0e807dba47c65e56629a8f1dd726c8fb8290c66";
-
-const callbackURL = "https://rugbyduelregistration.onrender.com/callback";
+const consumerKey = process.env.CONSUMER_KEY;
+const consumerSecret = process.env.CONSUMER_SECRET;
+const shortcode = process.env.SHORTCODE;
+const passkey = process.env.PASSKEY;
+const callbackURL = process.env.CALLBACK_URL;
 
 // =========================
 let pendingPayments = {};
 let issuedTickets = {};
-let failedPayments = {}; // ✅ NEW
+let failedPayments = {};
 
 // =========================
 app.get("/", (req, res) => {
@@ -64,8 +65,8 @@ app.post("/register", async (req, res) => {
     const amount = prices[ticketType] || 50;
 
     try {
-
         const token = await getAccessToken();
+
         const timestamp = new Date().toISOString().replace(/[^0-9]/g, "").slice(0, -3);
         const password = Buffer.from(shortcode + passkey + timestamp).toString("base64");
 
@@ -84,9 +85,7 @@ app.post("/register", async (req, res) => {
                 AccountReference: "RUGBY DUEL",
                 TransactionDesc: "Ticket Payment"
             },
-            {
-                headers: { Authorization: `Bearer ${token}` }
-            }
+            { headers: { Authorization: `Bearer ${token}` } }
         );
 
         const checkoutID = response.data.CheckoutRequestID;
@@ -99,13 +98,12 @@ app.post("/register", async (req, res) => {
             amount
         };
 
-        res.json({ message: "Check your phone and enter your M-Pesa PIN." });
+        res.json({ message: "STK push sent" });
 
     } catch (error) {
         console.error("STK ERROR:", error.response?.data || error.message);
         res.status(500).json({ message: "Payment failed." });
     }
-
 });
 
 // =========================
@@ -114,7 +112,6 @@ app.post("/register", async (req, res) => {
 app.post("/callback", async (req, res) => {
 
     try {
-
         const callback = req.body?.Body?.stkCallback;
         if (!callback) return res.json({ status: "invalid" });
 
@@ -125,12 +122,7 @@ app.post("/callback", async (req, res) => {
 
         // ❌ FAIL OR CANCEL
         if (resultCode !== 0) {
-            console.log("Payment cancelled or failed");
-
-            if (user) {
-                failedPayments[user.email] = true; // ✅ mark failed
-            }
-
+            if (user) failedPayments[user.email] = true;
             delete pendingPayments[checkoutID];
             return res.json({ status: "failed" });
         }
@@ -160,9 +152,13 @@ app.post("/callback", async (req, res) => {
 
         if (!user) return res.json({ status: "user_not_found" });
 
-        // =========================
-        // CREATE TICKET
-        // =========================
+        // جلوگیری duplicate ticket
+        const existing = Object.values(issuedTickets).find(t => t.receipt === receipt);
+        if (existing) {
+            delete pendingPayments[checkoutID];
+            return res.json({ status: "duplicate" });
+        }
+
         const ticketID = "RUGBY-" + Date.now();
         const qr = await QRCode.toDataURL(ticketID);
 
@@ -170,30 +166,19 @@ app.post("/callback", async (req, res) => {
         if (!fs.existsSync(dir)) fs.mkdirSync(dir);
 
         const pdfPath = path.join(dir, `${ticketID}.pdf`);
-
         const doc = new PDFDocument({ size: "A4" });
         const stream = fs.createWriteStream(pdfPath);
 
         doc.pipe(stream);
 
-        doc.rect(0, 0, doc.page.width, doc.page.height).fill("#f0f4ff");
-
-        doc.fillColor("#1a237e").fontSize(26).text("RUGBY DUEL TICKET", { align: "center" });
-
-        doc.moveDown();
-
-        doc.fillColor("#000").fontSize(16);
+        doc.text("RUGBY DUEL TICKET");
         doc.text(`Name: ${user.fullname}`);
         doc.text(`Ticket ID: ${ticketID}`);
         doc.text(`Category: ${user.ticketType}`);
         doc.text(`Amount: Ksh ${amount}`);
         doc.text(`Receipt: ${receipt}`);
-        doc.text(`Date: 18 April 2026`);
-        doc.text(`Venue: Eldoret Sports Club`);
 
-        doc.moveDown();
-
-        doc.image(qr, { fit: [150, 150], align: "center" });
+        doc.image(qr, { fit: [150, 150] });
 
         doc.end();
 
@@ -215,19 +200,20 @@ app.post("/callback", async (req, res) => {
                 const transporter = nodemailer.createTransport({
                     service: "gmail",
                     auth: {
-                        user: "ivankemei3@gmail.com",
-                        pass: "yjzx rltb qjle wchc"
+                        user: process.env.EMAIL_USER,
+                        pass: process.env.EMAIL_PASS
                     }
                 });
 
                 await transporter.sendMail({
-                    from: "ivankemei3@gmail.com",
+                    from: process.env.EMAIL_USER,
                     to: user.email,
                     subject: "Your Rugby Duel Ticket",
-                    html: `<h2>Your Ticket is Ready</h2>`,
+                    html: `<h2>Your Ticket</h2><p>ID: ${ticketID}</p>`,
                     attachments: [{ filename: `${ticketID}.pdf`, path: pdfPath }]
                 });
 
+                console.log("Email sent");
             } catch (err) {
                 console.error("Email error:", err.message);
             }
@@ -241,28 +227,24 @@ app.post("/callback", async (req, res) => {
         console.error("Callback Error:", err.message);
         res.json({ status: "error" });
     }
-
 });
 
 // =========================
-// STATUS (FIXED)
+// STATUS
 // =========================
 app.get("/ticket_status", (req, res) => {
 
     const email = req.query.email;
 
-    // ❌ FAILED
     if (failedPayments[email]) {
-        delete failedPayments[email]; // reset after showing once
+        delete failedPayments[email];
         return res.json({ status: "failed" });
     }
 
-    // ✅ PAID
     const entry = Object.entries(issuedTickets).find(([id, t]) => t.email === email);
 
     if (entry) {
         const [id, t] = entry;
-
         return res.json({
             status: "paid",
             ticket: {
@@ -276,7 +258,6 @@ app.get("/ticket_status", (req, res) => {
     }
 
     res.json({ status: "pending" });
-
 });
 
 // =========================
@@ -289,19 +270,15 @@ app.get("/download/:id", (req, res) => {
 });
 
 // =========================
-// QR SCAN GATE SYSTEM
+// VERIFY (QR SCAN)
 // =========================
 app.get("/verify/:ticketID", (req, res) => {
 
     const ticket = issuedTickets[req.params.ticketID];
 
-    if (!ticket) {
-        return res.json({ valid: false, message: "Invalid Ticket" });
-    }
+    if (!ticket) return res.json({ valid: false, message: "Invalid" });
 
-    if (ticket.used) {
-        return res.json({ valid: false, message: "Already Used" });
-    }
+    if (ticket.used) return res.json({ valid: false, message: "Used" });
 
     ticket.used = true;
 
@@ -310,7 +287,6 @@ app.get("/verify/:ticketID", (req, res) => {
         name: ticket.name,
         category: ticket.category
     });
-
 });
 
 // =========================
