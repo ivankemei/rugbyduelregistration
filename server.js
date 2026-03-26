@@ -44,9 +44,24 @@ app.get("/", (req, res) => {
 });
 
 // =========================
+// COUNT FUNCTION
+// =========================
 function getCategoryCount(category) {
     return Object.values(issuedTickets).filter(t => t.category === category).length;
 }
+
+// =========================
+// SLOTS ENDPOINT (🔥 FIX)
+// =========================
+app.get("/slots", (req, res) => {
+
+    const remaining = {
+        skill_showcase: Math.max(LIMITS.skill_showcase - getCategoryCount("skill_showcase"), 0),
+        head_to_head: Math.max(LIMITS.head_to_head - getCategoryCount("head_to_head"), 0)
+    };
+
+    res.json(remaining);
+});
 
 // =========================
 async function getAccessToken() {
@@ -70,15 +85,13 @@ app.post("/register", async (req, res) => {
     if (phone.startsWith("07")) phone = "254" + phone.substring(1);
     if (phone.startsWith("+254")) phone = phone.substring(1);
 
-    // =========================
-    // LIMIT CHECK
-    // =========================
+    // ✅ LIMIT CHECK BEFORE STK
     const currentCount = getCategoryCount(ticketType);
     const limit = LIMITS[ticketType];
 
     if (currentCount >= limit) {
         return res.status(400).json({
-            message: "This category is full"
+            message: "Category is full"
         });
     }
 
@@ -146,7 +159,7 @@ app.post("/callback", async (req, res) => {
 
         const user = pendingPayments[checkoutID];
 
-        // FAIL OR CANCEL
+        // ❌ CANCEL / FAIL
         if (resultCode !== 0) {
             if (user) failedPayments[user.email] = true;
             delete pendingPayments[checkoutID];
@@ -177,9 +190,7 @@ app.post("/callback", async (req, res) => {
 
         if (!user) return res.json({ status: "user_not_found" });
 
-        // =========================
-        // FINAL LIMIT CHECK (IMPORTANT)
-        // =========================
+        // ✅ FINAL LIMIT CHECK (race condition protection)
         const currentCount = getCategoryCount(user.ticketType);
         const limit = LIMITS[user.ticketType];
 
@@ -189,7 +200,7 @@ app.post("/callback", async (req, res) => {
             return res.json({ status: "limit_reached" });
         }
 
-        // جلوگیری duplicate
+        // ✅ DUPLICATE CHECK
         const existing = Object.values(issuedTickets).find(t => t.receipt === receipt);
         if (existing) {
             delete pendingPayments[checkoutID];
@@ -305,7 +316,7 @@ app.get("/download/:id", (req, res) => {
 });
 
 // =========================
-// VERIFY (QR SCAN)
+// VERIFY QR
 // =========================
 app.get("/verify/:ticketID", (req, res) => {
 
