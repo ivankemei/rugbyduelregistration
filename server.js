@@ -25,6 +25,15 @@ const passkey = process.env.PASSKEY;
 const callbackURL = process.env.CALLBACK_URL;
 
 // =========================
+// LIMITS
+// =========================
+const LIMITS = {
+    skill_showcase: 16,
+    head_to_head: 16,
+    spectator: Infinity
+};
+
+// =========================
 let pendingPayments = {};
 let issuedTickets = {};
 let failedPayments = {};
@@ -33,6 +42,11 @@ let failedPayments = {};
 app.get("/", (req, res) => {
     res.sendFile(path.join(__dirname, "index.html"));
 });
+
+// =========================
+function getCategoryCount(category) {
+    return Object.values(issuedTickets).filter(t => t.category === category).length;
+}
 
 // =========================
 async function getAccessToken() {
@@ -55,6 +69,18 @@ app.post("/register", async (req, res) => {
 
     if (phone.startsWith("07")) phone = "254" + phone.substring(1);
     if (phone.startsWith("+254")) phone = phone.substring(1);
+
+    // =========================
+    // LIMIT CHECK
+    // =========================
+    const currentCount = getCategoryCount(ticketType);
+    const limit = LIMITS[ticketType];
+
+    if (currentCount >= limit) {
+        return res.status(400).json({
+            message: "This category is full"
+        });
+    }
 
     const prices = {
         skill_showcase: 1000,
@@ -120,14 +146,13 @@ app.post("/callback", async (req, res) => {
 
         const user = pendingPayments[checkoutID];
 
-        // ❌ FAIL OR CANCEL
+        // FAIL OR CANCEL
         if (resultCode !== 0) {
             if (user) failedPayments[user.email] = true;
             delete pendingPayments[checkoutID];
             return res.json({ status: "failed" });
         }
 
-        // ❌ MUST HAVE METADATA
         if (!callback.CallbackMetadata) {
             if (user) failedPayments[user.email] = true;
             delete pendingPayments[checkoutID];
@@ -152,7 +177,19 @@ app.post("/callback", async (req, res) => {
 
         if (!user) return res.json({ status: "user_not_found" });
 
-        // جلوگیری duplicate ticket
+        // =========================
+        // FINAL LIMIT CHECK (IMPORTANT)
+        // =========================
+        const currentCount = getCategoryCount(user.ticketType);
+        const limit = LIMITS[user.ticketType];
+
+        if (currentCount >= limit) {
+            console.log("Limit reached after payment");
+            delete pendingPayments[checkoutID];
+            return res.json({ status: "limit_reached" });
+        }
+
+        // جلوگیری duplicate
         const existing = Object.values(issuedTickets).find(t => t.receipt === receipt);
         if (existing) {
             delete pendingPayments[checkoutID];
@@ -195,7 +232,6 @@ app.post("/callback", async (req, res) => {
                 qr
             };
 
-            // EMAIL
             try {
                 const transporter = nodemailer.createTransport({
                     service: "gmail",
@@ -213,7 +249,6 @@ app.post("/callback", async (req, res) => {
                     attachments: [{ filename: `${ticketID}.pdf`, path: pdfPath }]
                 });
 
-                console.log("Email sent");
             } catch (err) {
                 console.error("Email error:", err.message);
             }
@@ -277,7 +312,6 @@ app.get("/verify/:ticketID", (req, res) => {
     const ticket = issuedTickets[req.params.ticketID];
 
     if (!ticket) return res.json({ valid: false, message: "Invalid" });
-
     if (ticket.used) return res.json({ valid: false, message: "Used" });
 
     ticket.used = true;
