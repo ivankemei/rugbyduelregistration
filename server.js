@@ -28,8 +28,8 @@ const callbackURL = process.env.CALLBACK_URL;
 // LIMITS
 // =========================
 const LIMITS = {
-    skill_showcase: 16,
-    head_to_head: 16,
+    skill_showcase: 32,
+    head_to_head: 32,
     spectator: Infinity
 };
 
