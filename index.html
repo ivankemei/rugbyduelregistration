@@ -45,12 +45,14 @@ input,select{
 }
 
 button{
-  width:50%;
+  width:100%;
   padding:13px;
   background:#1a237e;
   color:white;
   border:none;
 }
+
+button:disabled{background:#aaa;}
 
 .message{margin-top:15px;font-weight:bold;}
 .slots{font-size:14px;color:#1a237e;}
@@ -63,9 +65,10 @@ button{
 <div class="hero" id="landing">
 <h1>🏉 Rugby Duel 2026</h1>
 <p>Ultimate 1v1 Rugby Showdown.</p>
-  <p>Skill Showcase- players demonstrate their technical rugby abilities through controlled challenges.</p>
-  <p>Head-to-Head Contact- This is the most intense category, where players compete in direct 1v1 physical battles.</p>
-  <p>Limited slots.</p>
+<p>Skill Showcase - Technical non-contact challenges.</p>
+<p>Head-to-Head - Full contact battles.</p>
+<p>Limited slots.</p>
+
 <button onclick="startRegistration()">Register Now</button>
 </div>
 
@@ -110,8 +113,9 @@ let currentSlots = {};
 // ================= LOAD SLOTS =================
 async function loadSlots(){
   try{
-    const res = await fetch("/slots");
+    const selectedValue = ticketSelect.value; // ✅ SAVE selection
 
+    const res = await fetch("/slots");
     if(!res.ok) throw new Error("Server error");
 
     const data = await res.json();
@@ -130,10 +134,17 @@ async function loadSlots(){
       </option>
     `;
 
+    // ✅ RESTORE selection
+    if(selectedValue){
+      ticketSelect.value = selectedValue;
+    }
+
+    // ✅ UPDATE SLOT TEXT AGAIN
+    updateSlotText();
+
   }catch(err){
     console.error("Slots error:", err);
 
-    // ✅ fallback (IMPORTANT FIX)
     ticketSelect.innerHTML = `
       <option value="">Select Ticket Type</option>
       <option value="skill_showcase">Skill Showcase</option>
@@ -145,8 +156,8 @@ async function loadSlots(){
   }
 }
 
-// SHOW SLOT INFO
-ticketSelect.addEventListener("change", ()=>{
+// ================= UPDATE SLOT TEXT =================
+function updateSlotText(){
   const val = ticketSelect.value;
 
   if(val === "spectator"){
@@ -157,15 +168,23 @@ ticketSelect.addEventListener("change", ()=>{
   } else {
     slotsInfo.textContent = "";
   }
-});
+}
 
-// refresh
+// ================= EVENTS =================
+ticketSelect.addEventListener("change", updateSlotText);
+
+// refresh slots every 5 seconds
 setInterval(loadSlots, 5000);
 loadSlots();
 
 // ================= SUBMIT =================
 form.addEventListener("submit", async (e)=>{
   e.preventDefault();
+
+  if(!ticketSelect.value){
+    messageDiv.textContent = "⚠ Please select a ticket type";
+    return;
+  }
 
   button.disabled = true;
   form.style.display = "none";
@@ -180,11 +199,17 @@ form.addEventListener("submit", async (e)=>{
   };
 
   try{
-    await fetch("/register",{
+    const response = await fetch("/register",{
       method:"POST",
       headers:{"Content-Type":"application/json"},
       body:JSON.stringify(data)
     });
+
+    const result = await response.json();
+
+    if(!response.ok){
+      throw new Error(result.message || "Registration failed");
+    }
 
     messageDiv.textContent = "Check your phone...";
 
@@ -218,7 +243,7 @@ form.addEventListener("submit", async (e)=>{
     },3000);
 
   }catch(err){
-    messageDiv.textContent="Server error";
+    messageDiv.textContent=err.message;
     form.style.display="block";
     button.disabled=false;
   }
