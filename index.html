@@ -3,28 +3,77 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Rugby Duel Ticket Registration</title>
+<title>Rugby Duel Event</title>
 
 <style>
 *{margin:0;padding:0;box-sizing:border-box;font-family:Arial;}
+
 body{
-  height:100vh;
-  display:flex;
-  justify-content:center;
-  align-items:center;
   background: linear-gradient(135deg,#0f2027,#203a43,#2c5364);
+  color:white;
 }
 
+/* ===== LANDING PAGE ===== */
+.hero{
+  height:100vh;
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+  align-items:center;
+  text-align:center;
+  padding:20px;
+}
+
+.hero h1{
+  font-size:32px;
+  margin-bottom:10px;
+}
+
+.hero p{
+  max-width:500px;
+  margin-bottom:20px;
+  line-height:1.5;
+}
+
+.categories{
+  margin:20px 0;
+  text-align:left;
+}
+
+.categories div{
+  margin:10px 0;
+  padding:10px;
+  background:rgba(255,255,255,0.1);
+  border-radius:6px;
+}
+
+.start-btn{
+  padding:14px 25px;
+  border:none;
+  border-radius:8px;
+  background:#1a237e;
+  color:white;
+  font-size:16px;
+  cursor:pointer;
+}
+
+/* ===== FORM ===== */
 .container{
+  display:none;
+  height:100vh;
+  justify-content:center;
+  align-items:center;
+}
+
+.form-box{
   background:white;
+  color:black;
   padding:30px;
   border-radius:12px;
   width:95%;
   max-width:420px;
   text-align:center;
 }
-
-h2{margin-bottom:20px;color:#1a237e;}
 
 input,select{
   width:100%;
@@ -47,7 +96,6 @@ button{
 
 button:disabled{
   background:#aaa;
-  cursor:not-allowed;
 }
 
 .message{
@@ -65,9 +113,44 @@ button:disabled{
 
 <body>
 
-<div class="container" id="container">
+<!-- ================= LANDING PAGE ================= -->
+<div class="hero" id="landing">
 
-<h2>🏉 Rugby Duel Ticket</h2>
+<h1>🏉 Rugby Duel 2026</h1>
+
+<p>
+Experience the ultimate 1v1 rugby showdown!  
+Test your skill, strength, and dominance in a competitive environment.  
+Limited slots available — only the best will compete.
+</p>
+
+<div class="categories">
+  <div>
+    <b>🔥 Skill Showcase (1v1)</b><br>
+    Non-contact freestyle rugby skills competition.
+  </div>
+
+  <div>
+    <b>💥 Head-to-Head Contact (1v1)</b><br>
+    Full contact battle — strength vs strength.
+  </div>
+
+  <div>
+    <b>👀 Spectator</b><br>
+    Watch the action live and support your favorites.
+  </div>
+</div>
+
+<button class="start-btn" onclick="startRegistration()">Register Now</button>
+
+</div>
+
+<!-- ================= FORM ================= -->
+<div class="container" id="formSection">
+
+<div class="form-box" id="container">
+
+<h2>Register</h2>
 
 <form id="ticketForm">
 
@@ -92,22 +175,27 @@ button:disabled{
 
 </div>
 
+</div>
+
 <script>
+// ================= SWITCH PAGE =================
+function startRegistration(){
+  document.getElementById("landing").style.display = "none";
+  document.getElementById("formSection").style.display = "flex";
+}
+
+// ================= FORM LOGIC =================
 const form = document.getElementById("ticketForm");
 const messageDiv = document.getElementById("message");
 const button = document.getElementById("payBtn");
 const ticketSelect = document.getElementById("ticketSelect");
-const slotsInfo = document.getElementById("slotsInfo");
 
-// =====================
-// FETCH LIVE SLOTS
-// =====================
+// ================= LOAD SLOTS =================
 async function loadSlots(){
   try{
     const res = await fetch("/slots");
     const data = await res.json();
 
-    // Update dropdown labels
     ticketSelect.innerHTML = `
       <option value="">Select Ticket Type</option>
       <option value="skill_showcase" ${data.skill_showcase === 0 ? "disabled" : ""}>
@@ -120,19 +208,14 @@ async function loadSlots(){
         Spectator (Unlimited)
       </option>
     `;
-
   }catch(err){
     console.error(err);
   }
 }
 
-// refresh slots every 5 seconds
 setInterval(loadSlots, 5000);
-loadSlots();
 
-// =====================
-// SUBMIT
-// =====================
+// ================= SUBMIT =================
 form.addEventListener("submit", async (e) => {
   e.preventDefault();
 
@@ -165,13 +248,11 @@ form.addEventListener("submit", async (e) => {
       const res = await fetch(`/ticket_status?email=${data.email}`);
       const ticketData = await res.json();
 
-      // ✅ SUCCESS
       if(ticketData.status === "paid"){
         clearInterval(poll);
         showTicket(ticketData.ticket);
       }
 
-      // ❌ CANCELLED
       if(ticketData.status === "failed"){
         clearInterval(poll);
         messageDiv.textContent = "❌ Payment cancelled";
@@ -179,7 +260,6 @@ form.addEventListener("submit", async (e) => {
         button.disabled = false;
       }
 
-      // ⏱ TIMEOUT
       if(attempts > 20){
         clearInterval(poll);
         messageDiv.textContent = "Session expired. Try again.";
@@ -197,9 +277,7 @@ form.addEventListener("submit", async (e) => {
   }
 });
 
-// =====================
-// SHOW TICKET
-// =====================
+// ================= SHOW TICKET =================
 function showTicket(ticket){
   document.getElementById("container").innerHTML = `
     <h2>🎟 Ticket</h2>
