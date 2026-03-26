@@ -13,7 +13,7 @@ body{
   color:white;
 }
 
-/* ===== LANDING PAGE ===== */
+/* ===== LANDING ===== */
 .hero{
   height:100vh;
   display:flex;
@@ -24,21 +24,8 @@ body{
   padding:20px;
 }
 
-.hero h1{
-  font-size:32px;
-  margin-bottom:10px;
-}
-
-.hero p{
-  max-width:500px;
-  margin-bottom:20px;
-  line-height:1.5;
-}
-
-.categories{
-  margin:20px 0;
-  text-align:left;
-}
+.hero h1{font-size:32px;margin-bottom:10px;}
+.hero p{max-width:500px;margin-bottom:20px;}
 
 .categories div{
   margin:10px 0;
@@ -53,7 +40,6 @@ body{
   border-radius:8px;
   background:#1a237e;
   color:white;
-  font-size:16px;
   cursor:pointer;
 }
 
@@ -79,116 +65,76 @@ input,select{
   width:100%;
   padding:12px;
   margin:10px 0;
-  border-radius:6px;
-  border:1px solid #ccc;
 }
 
 button{
   width:100%;
   padding:13px;
-  border:none;
-  border-radius:6px;
   background:#1a237e;
   color:white;
-  font-weight:bold;
-  cursor:pointer;
+  border:none;
 }
 
-button:disabled{
-  background:#aaa;
-}
+button:disabled{background:#aaa;}
 
-.message{
-  margin-top:15px;
-  font-weight:bold;
-}
-
-.slots{
-  font-size:13px;
-  color:#2c5364;
-}
+.message{margin-top:15px;font-weight:bold;}
+.slots{font-size:14px;color:#1a237e;margin-top:5px;}
 </style>
-
 </head>
 
 <body>
 
-<!-- ================= LANDING PAGE ================= -->
+<!-- LANDING -->
 <div class="hero" id="landing">
-
 <h1>🏉 Rugby Duel 2026</h1>
-
-<p>
-Experience the ultimate 1v1 rugby showdown!  
-Test your skill, strength, and dominance in a competitive environment.  
-Limited slots available — only the best will compete.
-</p>
+<p>Ultimate 1v1 rugby showdown. Limited slots. Only the best compete.</p>
 
 <div class="categories">
-  <div>
-    <b>🔥 Skill Showcase (1v1)</b><br>
-    Non-contact freestyle rugby skills competition.
-  </div>
-
-  <div>
-    <b>💥 Head-to-Head Contact (1v1)</b><br>
-    Full contact battle — strength vs strength.
-  </div>
-
-  <div>
-    <b>👀 Spectator</b><br>
-    Watch the action live and support your favorites.
-  </div>
+  <div><b>Skill Showcase</b> - Non-contact skills</div>
+  <div><b>Head-to-Head</b> - Full contact</div>
+  <div><b>Spectator</b> - Watch live</div>
 </div>
 
 <button class="start-btn" onclick="startRegistration()">Register Now</button>
-
 </div>
 
-<!-- ================= FORM ================= -->
+<!-- FORM -->
 <div class="container" id="formSection">
-
 <div class="form-box" id="container">
 
 <h2>Register</h2>
 
 <form id="ticketForm">
-
 <input type="text" name="fullname" placeholder="Full Name" required>
-<input type="email" name="email" placeholder="Email Address" required>
+<input type="email" name="email" placeholder="Email" required>
 <input type="tel" name="phone" placeholder="07xxxxxxxx" required>
 
 <select name="ticket" id="ticketSelect" required>
-<option value="">Select Ticket Type</option>
-<option value="skill_showcase">Skill Showcase</option>
-<option value="head_to_head">Head to Head</option>
-<option value="spectator">Spectator</option>
+<option value="">Loading...</option>
 </select>
 
 <p class="slots" id="slotsInfo"></p>
 
 <button type="submit" id="payBtn">Pay & Register</button>
-
 <div class="message" id="message"></div>
-
 </form>
 
 </div>
-
 </div>
 
 <script>
-// ================= SWITCH PAGE =================
 function startRegistration(){
-  document.getElementById("landing").style.display = "none";
-  document.getElementById("formSection").style.display = "flex";
+  document.getElementById("landing").style.display="none";
+  document.getElementById("formSection").style.display="flex";
 }
 
-// ================= FORM LOGIC =================
 const form = document.getElementById("ticketForm");
 const messageDiv = document.getElementById("message");
 const button = document.getElementById("payBtn");
 const ticketSelect = document.getElementById("ticketSelect");
+const slotsInfo = document.getElementById("slotsInfo");
+
+let currentSlots = {};
 
 // ================= LOAD SLOTS =================
 async function loadSlots(){
@@ -196,27 +142,46 @@ async function loadSlots(){
     const res = await fetch("/slots");
     const data = await res.json();
 
+    currentSlots = data;
+
     ticketSelect.innerHTML = `
       <option value="">Select Ticket Type</option>
-      <option value="skill_showcase" ${data.skill_showcase === 0 ? "disabled" : ""}>
+      <option value="skill_showcase" ${data.skill_showcase===0?"disabled":""}>
         Skill Showcase (${data.skill_showcase} left)
       </option>
-      <option value="head_to_head" ${data.head_to_head === 0 ? "disabled" : ""}>
+      <option value="head_to_head" ${data.head_to_head===0?"disabled":""}>
         Head to Head (${data.head_to_head} left)
       </option>
       <option value="spectator">
         Spectator (Unlimited)
       </option>
     `;
+
   }catch(err){
     console.error(err);
   }
 }
 
+// SHOW SLOT INFO WHEN SELECTED
+ticketSelect.addEventListener("change", ()=>{
+  const val = ticketSelect.value;
+
+  if(val === "spectator"){
+    slotsInfo.textContent = "Unlimited spectators allowed";
+  } 
+  else if(currentSlots[val] !== undefined){
+    slotsInfo.textContent = currentSlots[val] + " slots remaining";
+  } else {
+    slotsInfo.textContent = "";
+  }
+});
+
+// refresh every 5s
 setInterval(loadSlots, 5000);
+loadSlots(); // IMPORTANT (you missed this)
 
 // ================= SUBMIT =================
-form.addEventListener("submit", async (e) => {
+form.addEventListener("submit", async (e)=>{
   e.preventDefault();
 
   button.disabled = true;
@@ -231,8 +196,8 @@ form.addEventListener("submit", async (e) => {
     ticket: formData.get("ticket")
   };
 
-  try {
-    await fetch("/register", {
+  try{
+    await fetch("/register",{
       method:"POST",
       headers:{"Content-Type":"application/json"},
       body:JSON.stringify(data)
@@ -242,44 +207,44 @@ form.addEventListener("submit", async (e) => {
 
     let attempts = 0;
 
-    const poll = setInterval(async () => {
+    const poll = setInterval(async ()=>{
       attempts++;
 
       const res = await fetch(`/ticket_status?email=${data.email}`);
       const ticketData = await res.json();
 
-      if(ticketData.status === "paid"){
+      if(ticketData.status==="paid"){
         clearInterval(poll);
         showTicket(ticketData.ticket);
       }
 
-      if(ticketData.status === "failed"){
+      if(ticketData.status==="failed"){
         clearInterval(poll);
-        messageDiv.textContent = "❌ Payment cancelled";
-        form.style.display = "block";
-        button.disabled = false;
+        messageDiv.textContent="❌ Payment cancelled";
+        form.style.display="block";
+        button.disabled=false;
       }
 
-      if(attempts > 20){
+      if(attempts>20){
         clearInterval(poll);
-        messageDiv.textContent = "Session expired. Try again.";
-        form.style.display = "block";
-        button.disabled = false;
+        messageDiv.textContent="Session expired. Try again.";
+        form.style.display="block";
+        button.disabled=false;
       }
 
-    }, 3000);
+    },3000);
 
-  } catch (err) {
+  }catch(err){
     console.error(err);
-    messageDiv.textContent = "Server error";
-    form.style.display = "block";
-    button.disabled = false;
+    messageDiv.textContent="Server error";
+    form.style.display="block";
+    button.disabled=false;
   }
 });
 
 // ================= SHOW TICKET =================
 function showTicket(ticket){
-  document.getElementById("container").innerHTML = `
+  document.getElementById("container").innerHTML=`
     <h2>🎟 Ticket</h2>
     <p><b>Name:</b> ${ticket.name}</p>
     <p><b>ID:</b> ${ticket.id}</p>
