@@ -3,83 +3,190 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Rugby Duel Ticket Registration</title>
+<title>Rugby Duel Event</title>
 
 <style>
-*{margin:0;padding:0;box-sizing:border-box;font-family:Arial, Helvetica, sans-serif;}
-body{height:100vh;display:flex;justify-content:center;align-items:center;background: linear-gradient(135deg,#0f2027,#203a43,#2c5364);overflow:hidden;}
-body::before{content:"";position:absolute;width:200%;height:200%;background: radial-gradient(circle,#ffffff22 1px, transparent 1px);background-size:40px 40px;animation: moveBg 40s linear infinite;}
-@keyframes moveBg{0%{transform:translate(0,0)}100%{transform:translate(-200px,-200px)}}
+*{margin:0;padding:0;box-sizing:border-box;font-family:Arial;}
 
-.container{background:white;padding:35px;border-radius:14px;box-shadow:0 10px 35px rgba(0,0,0,0.3);max-width:420px;width:90%;text-align:center;animation:fadeIn 1s ease;position:relative;z-index:1;}
-@keyframes fadeIn{from{opacity:0; transform:translateY(30px);} to{opacity:1; transform:translateY(0);}}
-h2{margin-bottom:20px;color:#1a237e;}
-input,select{width:100%;padding:12px;margin:10px 0;border-radius:6px;border:1px solid #ccc;transition:0.3s;font-size:15px;}
-input:focus,select:focus{border-color:#3949ab;outline:none;box-shadow:0 0 5px rgba(57,73,171,0.4);}
-button{width:100%;padding:13px;border:none;border-radius:6px;background:linear-gradient(45deg,#1a237e,#3949ab);color:white;font-weight:bold;font-size:15px;cursor:pointer;transition:0.3s;}
-button:hover{transform:translateY(-2px);box-shadow:0 6px 15px rgba(0,0,0,0.25);}
-.message{margin-top:15px;font-weight:bold;color:#1a237e;min-height:20px;}
-.price{margin-top:5px;font-weight:bold;color:#2c5364;}
-.loading{pointer-events:none;opacity:0.8;}
-.ticket-card{border:1px solid #ccc;border-radius:10px;padding:15px;margin-top:20px;text-align:left;}
-.ticket-card a{display:inline-block;margin-top:10px;padding:8px 15px;background:#3949ab;color:white;text-decoration:none;border-radius:5px;}
+body{
+  background: linear-gradient(135deg,#0f2027,#203a43,#2c5364);
+  color:white;
+}
+
+.hero{
+  height:100vh;
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+  align-items:center;
+  text-align:center;
+}
+
+.container{
+  display:none;
+  height:100vh;
+  justify-content:center;
+  align-items:center;
+}
+
+.form-box{
+  background:white;
+  color:black;
+  padding:30px;
+  border-radius:12px;
+  width:95%;
+  max-width:420px;
+}
+
+input,select{
+  width:100%;
+  padding:12px;
+  margin:10px 0;
+}
+
+button{
+  width:40%;
+  padding:13px;
+  background:#1a237e;
+  color:white;
+  border:none;
+}
+
+button:disabled{background:#aaa;}
+
+.message{margin-top:15px;font-weight:bold;}
+.slots{font-size:14px;color:#1a237e;}
 </style>
-
 </head>
 
 <body>
 
-<div class="container" id="container">
+<!-- LANDING -->
+<div class="hero" id="landing">
+<h1>🏉 Rugby Duel 2026</h1>
+<p>Ultimate 1v1 Rugby Showdown.</p>
+<p>Skill Showcase - Technical non-contact challenges.</p>
+<p>Head-to-Head - Full contact battles.</p>
+<p>Limited slots.</p>
 
-<h2>Rugby Duel Ticket</h2>
+<button onclick="startRegistration()">Register Now</button>
+</div>
+
+<!-- FORM -->
+<div class="container" id="formSection">
+<div class="form-box" id="container">
+
+<h2>Register</h2>
 
 <form id="ticketForm">
-
 <input type="text" name="fullname" placeholder="Full Name" required>
-<input type="email" name="email" placeholder="Email Address" required>
-<input type="tel" name="phone" placeholder="Phone Number (07xxxxxxxx)" required>
+<input type="email" name="email" placeholder="Email" required>
+<input type="tel" name="phone" placeholder="07xxxxxxxx" required>
 
 <select name="ticket" id="ticketSelect" required>
-<option value="">Select Ticket Type</option>
-<option value="skill_showcase">1v1 - Skill Showcase - Ksh 1000</option>
-<option value="head_to_head">1v1 - Head to Head Contact - Ksh 1000</option>
-<option value="spectator">Spectator Ticket - Ksh 5</option>
+<option value="">Loading tickets...</option>
 </select>
 
-<p class="price" id="priceDisplay"></p>
+<p class="slots" id="slotsInfo"></p>
 
 <button type="submit" id="payBtn">Pay & Register</button>
-
 <div class="message" id="message"></div>
-
 </form>
 
 </div>
+</div>
 
 <script>
+function startRegistration(){
+  document.getElementById("landing").style.display="none";
+  document.getElementById("formSection").style.display="flex";
+}
+
 const form = document.getElementById("ticketForm");
 const messageDiv = document.getElementById("message");
 const button = document.getElementById("payBtn");
 const ticketSelect = document.getElementById("ticketSelect");
-const priceDisplay = document.getElementById("priceDisplay");
+const slotsInfo = document.getElementById("slotsInfo");
 
-const prices = {
-  skill_showcase: 1000,
-  head_to_head: 1000,
-  spectator: 5
-};
+let currentSlots = {};
 
-// Show price
-ticketSelect.addEventListener("change", () => {
-  const selected = ticketSelect.value;
-  priceDisplay.textContent = prices[selected] ? "Price: Ksh " + prices[selected] : "";
-});
+// ================= LOAD SLOTS =================
+async function loadSlots(){
+  try{
+    const selectedValue = ticketSelect.value; // ✅ SAVE selection
 
-// Submit
-form.addEventListener("submit", async (e) => {
+    const res = await fetch("/slots");
+    if(!res.ok) throw new Error("Server error");
+
+    const data = await res.json();
+    currentSlots = data;
+
+    ticketSelect.innerHTML = `
+      <option value="">Select Ticket Type</option>
+      <option value="skill_showcase" ${data.skill_showcase===0?"disabled":""}>
+        Skill Showcase (${data.skill_showcase} left)
+      </option>
+      <option value="head_to_head" ${data.head_to_head===0?"disabled":""}>
+        Head to Head (${data.head_to_head} left)
+      </option>
+      <option value="spectator">
+        Spectator (Unlimited)
+      </option>
+    `;
+
+    // ✅ RESTORE selection
+    if(selectedValue){
+      ticketSelect.value = selectedValue;
+    }
+
+    // ✅ UPDATE SLOT TEXT AGAIN
+    updateSlotText();
+
+  }catch(err){
+    console.error("Slots error:", err);
+
+    ticketSelect.innerHTML = `
+      <option value="">Select Ticket Type</option>
+      <option value="skill_showcase">Skill Showcase</option>
+      <option value="head_to_head">Head to Head</option>
+      <option value="spectator">Spectator</option>
+    `;
+
+    slotsInfo.textContent = "⚠ Unable to load live slots";
+  }
+}
+
+// ================= UPDATE SLOT TEXT =================
+function updateSlotText(){
+  const val = ticketSelect.value;
+
+  if(val === "spectator"){
+    slotsInfo.textContent = "Unlimited spectators";
+  } 
+  else if(currentSlots[val] !== undefined){
+    slotsInfo.textContent = currentSlots[val] + " slots remaining";
+  } else {
+    slotsInfo.textContent = "";
+  }
+}
+
+// ================= EVENTS =================
+ticketSelect.addEventListener("change", updateSlotText);
+
+// refresh slots every 5 seconds
+setInterval(loadSlots, 5000);
+loadSlots();
+
+// ================= SUBMIT =================
+form.addEventListener("submit", async (e)=>{
   e.preventDefault();
 
-  button.classList.add("loading");
+  if(!ticketSelect.value){
+    messageDiv.textContent = "⚠ Please select a ticket type";
+    return;
+  }
+
+  button.disabled = true;
   form.style.display = "none";
   messageDiv.textContent = "Sending STK push...";
 
@@ -91,71 +198,66 @@ form.addEventListener("submit", async (e) => {
     ticket: formData.get("ticket")
   };
 
-  try {
-    await fetch("/register", {
+  try{
+    const response = await fetch("/register",{
       method:"POST",
       headers:{"Content-Type":"application/json"},
       body:JSON.stringify(data)
     });
 
-    messageDiv.textContent = "Waiting for M-Pesa confirmation...";
+    const result = await response.json();
+
+    if(!response.ok){
+      throw new Error(result.message || "Registration failed");
+    }
+
+    messageDiv.textContent = "Check your phone...";
 
     let attempts = 0;
 
-    const poll = setInterval(async () => {
+    const poll = setInterval(async ()=>{
       attempts++;
 
-      try {
-        const res = await fetch(`/ticket_status?email=${data.email}`);
-        const ticketData = await res.json();
+      const res = await fetch(`/ticket_status?email=${data.email}`);
+      const ticketData = await res.json();
 
-        // ✅ SUCCESS
-        if (ticketData.status === "paid") {
-          clearInterval(poll);
-          showTicket(ticketData.ticket);
-        }
-
-        // ❌ CANCELLED / FAILED
-        if (ticketData.status === "failed") {
-          clearInterval(poll);
-          messageDiv.textContent = "Payment cancelled. Try again.";
-          form.style.display = "block";
-          button.classList.remove("loading");
-        }
-
-        // ⏱ TIMEOUT (60 seconds)
-        if (attempts > 20) {
-          clearInterval(poll);
-          messageDiv.textContent = "Session expired. Try again.";
-          form.style.display = "block";
-          button.classList.remove("loading");
-        }
-
-      } catch (err) {
-        console.error(err);
+      if(ticketData.status==="paid"){
+        clearInterval(poll);
+        showTicket(ticketData.ticket);
       }
 
-    }, 3000);
+      if(ticketData.status==="failed"){
+        clearInterval(poll);
+        messageDiv.textContent="❌ Payment cancelled";
+        form.style.display="block";
+        button.disabled=false;
+      }
 
-  } catch (err) {
-    console.error(err);
-    messageDiv.textContent = "Server error. Try again.";
-    form.style.display = "block";
-    button.classList.remove("loading");
+      if(attempts>20){
+        clearInterval(poll);
+        messageDiv.textContent="Session expired";
+        form.style.display="block";
+        button.disabled=false;
+      }
+
+    },3000);
+
+  }catch(err){
+    messageDiv.textContent=err.message;
+    form.style.display="block";
+    button.disabled=false;
   }
 });
 
-// Show ticket
+// ================= SHOW TICKET =================
 function showTicket(ticket){
-  document.getElementById("container").innerHTML = `
-    <h2>Your Ticket</h2>
-    <div class="ticket-card">
-      <p><b>Name:</b> ${ticket.name}</p>
-      <p><b>Ticket ID:</b> ${ticket.id}</p>
-      <p><b>Category:</b> ${ticket.category}</p>
-      <p><b>Amount Paid:</b> Ksh ${ticket.amount}</p>
-      <a href="/download/${ticket.id}">Download Ticket</a>
-    </div>
+  document.getElementById("container").innerHTML=`
+    <h2>🎟 Ticket</h2>
+    <p><b>Name:</b> ${ticket.name}</p>
+    <p><b>ID:</b> ${ticket.id}</p>
+    <p><b>Category:</b> ${ticket.category}</p>
+    <p><b>Amount:</b> Ksh ${ticket.amount}</p>
+    <a href="/download/${ticket.id}">Download Ticket</a>
   `;
 }
 </script>
