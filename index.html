@@ -13,7 +13,6 @@ body{
   color:white;
 }
 
-/* ===== LANDING ===== */
 .hero{
   height:100vh;
   display:flex;
@@ -21,29 +20,8 @@ body{
   justify-content:center;
   align-items:center;
   text-align:center;
-  padding:20px;
 }
 
-.hero h1{font-size:32px;margin-bottom:10px;}
-.hero p{max-width:500px;margin-bottom:20px;}
-
-.categories div{
-  margin:10px 0;
-  padding:10px;
-  background:rgba(255,255,255,0.1);
-  border-radius:6px;
-}
-
-.start-btn{
-  padding:14px 25px;
-  border:none;
-  border-radius:8px;
-  background:#1a237e;
-  color:white;
-  cursor:pointer;
-}
-
-/* ===== FORM ===== */
 .container{
   display:none;
   height:100vh;
@@ -58,7 +36,6 @@ body{
   border-radius:12px;
   width:95%;
   max-width:420px;
-  text-align:center;
 }
 
 input,select{
@@ -75,10 +52,8 @@ button{
   border:none;
 }
 
-button:disabled{background:#aaa;}
-
 .message{margin-top:15px;font-weight:bold;}
-.slots{font-size:14px;color:#1a237e;margin-top:5px;}
+.slots{font-size:14px;color:#1a237e;}
 </style>
 </head>
 
@@ -87,15 +62,8 @@ button:disabled{background:#aaa;}
 <!-- LANDING -->
 <div class="hero" id="landing">
 <h1>🏉 Rugby Duel 2026</h1>
-<p>Ultimate 1v1 rugby showdown. Limited slots. Only the best compete.</p>
-
-<div class="categories">
-  <div><b>Skill Showcase</b> - Non-contact skills</div>
-  <div><b>Head-to-Head</b> - Full contact</div>
-  <div><b>Spectator</b> - Watch live</div>
-</div>
-
-<button class="start-btn" onclick="startRegistration()">Register Now</button>
+<p>Ultimate 1v1 rugby showdown. Limited slots.</p>
+<button onclick="startRegistration()">Register Now</button>
 </div>
 
 <!-- FORM -->
@@ -110,7 +78,7 @@ button:disabled{background:#aaa;}
 <input type="tel" name="phone" placeholder="07xxxxxxxx" required>
 
 <select name="ticket" id="ticketSelect" required>
-<option value="">Loading...</option>
+<option value="">Loading tickets...</option>
 </select>
 
 <p class="slots" id="slotsInfo"></p>
@@ -140,8 +108,10 @@ let currentSlots = {};
 async function loadSlots(){
   try{
     const res = await fetch("/slots");
-    const data = await res.json();
 
+    if(!res.ok) throw new Error("Server error");
+
+    const data = await res.json();
     currentSlots = data;
 
     ticketSelect.innerHTML = `
@@ -158,16 +128,26 @@ async function loadSlots(){
     `;
 
   }catch(err){
-    console.error(err);
+    console.error("Slots error:", err);
+
+    // ✅ fallback (IMPORTANT FIX)
+    ticketSelect.innerHTML = `
+      <option value="">Select Ticket Type</option>
+      <option value="skill_showcase">Skill Showcase</option>
+      <option value="head_to_head">Head to Head</option>
+      <option value="spectator">Spectator</option>
+    `;
+
+    slotsInfo.textContent = "⚠ Unable to load live slots";
   }
 }
 
-// SHOW SLOT INFO WHEN SELECTED
+// SHOW SLOT INFO
 ticketSelect.addEventListener("change", ()=>{
   const val = ticketSelect.value;
 
   if(val === "spectator"){
-    slotsInfo.textContent = "Unlimited spectators allowed";
+    slotsInfo.textContent = "Unlimited spectators";
   } 
   else if(currentSlots[val] !== undefined){
     slotsInfo.textContent = currentSlots[val] + " slots remaining";
@@ -176,9 +156,9 @@ ticketSelect.addEventListener("change", ()=>{
   }
 });
 
-// refresh every 5s
+// refresh
 setInterval(loadSlots, 5000);
-loadSlots(); // IMPORTANT (you missed this)
+loadSlots();
 
 // ================= SUBMIT =================
 form.addEventListener("submit", async (e)=>{
@@ -227,7 +207,7 @@ form.addEventListener("submit", async (e)=>{
 
       if(attempts>20){
         clearInterval(poll);
-        messageDiv.textContent="Session expired. Try again.";
+        messageDiv.textContent="Session expired";
         form.style.display="block";
         button.disabled=false;
       }
@@ -235,7 +215,6 @@ form.addEventListener("submit", async (e)=>{
     },3000);
 
   }catch(err){
-    console.error(err);
     messageDiv.textContent="Server error";
     form.style.display="block";
     button.disabled=false;
