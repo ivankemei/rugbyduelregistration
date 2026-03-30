@@ -80,6 +80,17 @@ button{
 
 .slots{font-size:14px;color:#1a237e;margin-top:5px;}
 .message{margin-top:10px;font-weight:bold;}
+
+/* NEW: admin layout fix */
+.admin-flex{
+  display:flex;
+  flex-direction:column;
+  gap:15px;
+}
+
+#reader{
+  display:none;
+}
 </style>
 </head>
 
@@ -92,10 +103,10 @@ button{
 <p><b>Date & Venue:</b> To be confirmed</p>
 
 <div class="categories">
-<div>🔥 Skill Showcase</div>
-<div>💥 Head-to-Head</div>
-<div>🏉 Rugby 7s</div>
-<div>👀 Spectator</div>
+<div><b>🔥 Skill Showcase</b><br>Test your passing, kicking, agility & rugby technique without contact.</div>
+<div><b>💥 Head-to-Head</b><br>1v1 full-contact rugby battle — strength, speed & dominance.</div>
+<div><b>🏉 Rugby 7s</b><br>Team-based tournament (7 players). Limited to 8 elite teams.</div>
+<div><b>👀 Spectator</b><br>Watch all matches live and enjoy the event atmosphere.</div>
 </div>
 
 <button class="btn" onclick="showTicketForm()">Register Ticket</button>
@@ -158,14 +169,19 @@ button{
 
 <!-- ADMIN DASHBOARD -->
 <div class="container" id="adminDash">
-<div class="form-box">
+<div class="form-box admin-flex">
+
 <h2>Dashboard</h2>
+
 <p id="adminData"></p>
 
-<div id="reader" style="width:100%"></div>
+<button onclick="toggleScanner()">📷 Scan Ticket</button>
+
+<div id="reader"></div>
 <p id="scanResult"></p>
 
 <button onclick="goHome()">Logout</button>
+
 </div>
 </div>
 
@@ -174,7 +190,17 @@ button{
 function showTicketForm(){hideAll();ticketSection.style.display="flex";}
 function showTeamForm(){hideAll();teamSection.style.display="flex";}
 function showAdminLogin(){hideAll();adminLogin.style.display="flex";}
-function goHome(){hideAll();landing.style.display="flex";}
+function goHome(){
+  hideAll();
+  landing.style.display="flex";
+
+  // stop scanner when leaving admin
+  if(scannerInstance){
+    scannerInstance.stop().catch(()=>{});
+    document.getElementById("reader").style.display="none";
+  }
+}
+
 function hideAll(){
   landing.style.display="none";
   ticketSection.style.display="none";
@@ -183,7 +209,7 @@ function hideAll(){
   adminDash.style.display="none";
 }
 
-// LOAD ONCE (fix flicker)
+// LOAD ONCE
 let loaded=false;
 
 async function loadSlots(){
@@ -210,7 +236,7 @@ async function loadTeamSlots(){
 loadSlots();
 loadTeamSlots();
 
-// TICKET FIX (polling added)
+// TICKET
 ticketForm.addEventListener("submit", async (e)=>{
   e.preventDefault();
 
@@ -251,7 +277,7 @@ ticketForm.addEventListener("submit", async (e)=>{
   },3000);
 });
 
-// TEAM stays same (already good)
+// TEAM
 teamForm.addEventListener("submit", async (e)=>{
   e.preventDefault();
 
@@ -286,15 +312,14 @@ teamForm.addEventListener("submit", async (e)=>{
   },3000);
 });
 
-// ADMIN LOGIN
+// ADMIN LOGIN (FIXED)
 function loginAdmin(){
   const pass = document.getElementById("adminPass").value;
 
   if(pass==="admin123"){
-    hideAll();
+    hideAll(); // 🔥 ensures users UI disappears fully
     adminDash.style.display="flex";
     loadAdmin();
-    startScanner();
   }else{
     alert("Wrong password");
   }
@@ -312,20 +337,36 @@ async function loadAdmin(){
   `;
 }
 
-// QR SCANNER
-function startScanner(){
-  const scanner = new Html5Qrcode("reader");
+// QR SCANNER FIX (toggle + no overlap)
+let scannerInstance=null;
+let scanning=false;
 
-  scanner.start(
-    { facingMode: "environment" },
-    { fps: 10, qrbox: 250 },
-    async (text)=>{
-      const res = await fetch(`/verify/${text}`);
-      const data = await res.json();
+function toggleScanner(){
+  const reader = document.getElementById("reader");
 
-      scanResult.textContent = data.valid ? "✅ " + data.name : "❌ Invalid";
-    }
-  );
+  if(!scanning){
+    reader.style.display="block";
+
+    scannerInstance = new Html5Qrcode("reader");
+
+    scannerInstance.start(
+      { facingMode: "environment" },
+      { fps: 10, qrbox: 250 },
+      async (text)=>{
+        const res = await fetch(`/verify/${text}`);
+        const data = await res.json();
+
+        scanResult.textContent = data.valid ? "✅ " + data.name : "❌ Invalid";
+      }
+    );
+
+    scanning=true;
+
+  }else{
+    scannerInstance.stop();
+    reader.style.display="none";
+    scanning=false;
+  }
 }
 </script>
 
