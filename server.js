@@ -34,19 +34,19 @@ const LIMITS = {
 };
 
 // =========================
-// TEAM SYSTEM
+// TEAM SYSTEM (UPDATED 🔥)
 // =========================
 const TEAM_LIMIT = 8;
 const TEAM_PRICE = 5000;
 
 let teams = [];
-let pendingTeamPayments = {}; // 🔥 NEW
+let pendingTeamPayments = {}; // ✅ NEW
+let failedTeamPayments = {};  // ✅ NEW
 
 // =========================
 let pendingPayments = {};
 let issuedTickets = {};
 let failedPayments = {};
-let failedTeamPayments = {}; // 🔥 NEW
 
 // =========================
 app.get("/", (req, res) => {
@@ -61,7 +61,7 @@ function getCategoryCount(category) {
 }
 
 // =========================
-// SLOTS ENDPOINT
+// SLOTS ENDPOINT (UNCHANGED ✅)
 // =========================
 app.get("/slots", (req, res) => {
     const remaining = {
@@ -72,7 +72,7 @@ app.get("/slots", (req, res) => {
 });
 
 // =========================
-// TEAM SLOTS
+// TEAM SLOTS (UNCHANGED ✅)
 // =========================
 function getTeamSlots() {
     return {
@@ -83,26 +83,16 @@ function getTeamSlots() {
     };
 }
 
+app.get("/team_slots", (req, res) => {
+    res.json(getTeamSlots());
+});
+
 app.get("/team-slots", (req, res) => {
     res.json(getTeamSlots());
 });
 
 // =========================
-// ACCESS TOKEN
-// =========================
-async function getAccessToken() {
-    const auth = Buffer.from(`${consumerKey}:${consumerSecret}`).toString("base64");
-
-    const response = await axios.get(
-        "https://api.safaricom.co.ke/oauth/v1/generate?grant_type=client_credentials",
-        { headers: { Authorization: `Basic ${auth}` } }
-    );
-
-    return response.data.access_token;
-}
-
-// =========================
-// 🆕 TEAM REGISTER (WITH PAYMENT)
+// TEAM REGISTRATION (UPDATED 🔥 WITH PAYMENT)
 // =========================
 app.post("/register-team", async (req, res) => {
 
@@ -116,8 +106,8 @@ app.post("/register-team", async (req, res) => {
         return res.status(400).json({ message: "All team slots are taken" });
     }
 
-    const exists = teams.find(t =>
-        t.teamName.toLowerCase() === teamName.toLowerCase()
+    const exists = teams.find(
+        t => t.teamName.toLowerCase() === teamName.toLowerCase()
     );
 
     if (exists) {
@@ -160,16 +150,95 @@ app.post("/register-team", async (req, res) => {
             phone
         };
 
-        res.json({ message: "STK push sent for team registration" });
+        res.json({ message: "STK push sent for team" });
 
     } catch (error) {
         console.error("TEAM STK ERROR:", error.response?.data || error.message);
-        res.status(500).json({ message: "Team payment failed" });
+        res.status(500).json({ message: "Team payment failed." });
     }
 });
 
 // =========================
-// CALLBACK (UPDATED)
+async function getAccessToken() {
+    const auth = Buffer.from(`${consumerKey}:${consumerSecret}`).toString("base64");
+
+    const response = await axios.get(
+        "https://api.safaricom.co.ke/oauth/v1/generate?grant_type=client_credentials",
+        { headers: { Authorization: `Basic ${auth}` } }
+    );
+
+    return response.data.access_token;
+}
+
+// =========================
+// REGISTER (UNCHANGED ✅)
+// =========================
+app.post("/register", async (req, res) => {
+
+    let { fullname, phone, email, ticket: ticketType } = req.body;
+
+    if (phone.startsWith("07")) phone = "254" + phone.substring(1);
+    if (phone.startsWith("+254")) phone = phone.substring(1);
+
+    const currentCount = getCategoryCount(ticketType);
+    const limit = LIMITS[ticketType];
+
+    if (currentCount >= limit) {
+        return res.status(400).json({ message: "Category is full" });
+    }
+
+    const prices = {
+        skill_showcase: 1000,
+        head_to_head: 1000,
+        spectator: 500
+    };
+
+    const amount = prices[ticketType] || 50;
+
+    try {
+        const token = await getAccessToken();
+
+        const timestamp = new Date().toISOString().replace(/[^0-9]/g, "").slice(0, -3);
+        const password = Buffer.from(shortcode + passkey + timestamp).toString("base64");
+
+        const response = await axios.post(
+            "https://api.safaricom.co.ke/mpesa/stkpush/v1/processrequest",
+            {
+                BusinessShortCode: shortcode,
+                Password: password,
+                Timestamp: timestamp,
+                TransactionType: "CustomerBuyGoodsOnline",
+                Amount: amount,
+                PartyA: phone,
+                PartyB: "6691976",
+                PhoneNumber: phone,
+                CallBackURL: callbackURL,
+                AccountReference: "RUGBY DUEL",
+                TransactionDesc: "Ticket Payment"
+            },
+            { headers: { Authorization: `Bearer ${token}` } }
+        );
+
+        const checkoutID = response.data.CheckoutRequestID;
+
+        pendingPayments[checkoutID] = {
+            fullname,
+            phone,
+            email,
+            ticketType,
+            amount
+        };
+
+        res.json({ message: "STK push sent" });
+
+    } catch (error) {
+        console.error("STK ERROR:", error.response?.data || error.message);
+        res.status(500).json({ message: "Payment failed." });
+    }
+});
+
+// =========================
+// CALLBACK (UPDATED 🔥)
 // =========================
 app.post("/callback", async (req, res) => {
 
@@ -180,7 +249,7 @@ app.post("/callback", async (req, res) => {
         const checkoutID = callback.CheckoutRequestID;
         const resultCode = callback.ResultCode;
 
-        // ================= TEAM PAYMENT =================
+        // ✅ TEAM PAYMENT FIRST
         const teamUser = pendingTeamPayments[checkoutID];
 
         if (teamUser) {
@@ -199,15 +268,38 @@ app.post("/callback", async (req, res) => {
             };
 
             teams.push(team);
+
             delete pendingTeamPayments[checkoutID];
 
             return res.json({ status: "team_registered" });
         }
 
-        // ================= NORMAL TICKET FLOW =================
+        // ================= NORMAL FLOW (UNCHANGED)
         const user = pendingPayments[checkoutID];
 
         if (resultCode !== 0) {
+            if (user) failedPayments[user.email] = true;
+            delete pendingPayments[checkoutID];
+            return res.json({ status: "failed" });
+        }
+
+        if (!callback.CallbackMetadata) {
+            if (user) failedPayments[user.email] = true;
+            delete pendingPayments[checkoutID];
+            return res.json({ status: "failed" });
+        }
+
+        const metadata = callback.CallbackMetadata.Item || [];
+
+        let receipt = null;
+        let amount = null;
+
+        metadata.forEach(item => {
+            if (item.Name === "MpesaReceiptNumber") receipt = item.Value;
+            if (item.Name === "Amount") amount = item.Value;
+        });
+
+        if (!receipt || !amount) {
             if (user) failedPayments[user.email] = true;
             delete pendingPayments[checkoutID];
             return res.json({ status: "failed" });
@@ -222,25 +314,32 @@ app.post("/callback", async (req, res) => {
         if (!fs.existsSync(dir)) fs.mkdirSync(dir);
 
         const pdfPath = path.join(dir, `${ticketID}.pdf`);
-        const doc = new PDFDocument();
+        const doc = new PDFDocument({ size: "A4" });
         const stream = fs.createWriteStream(pdfPath);
 
         doc.pipe(stream);
+
         doc.text("RUGBY DUEL TICKET");
         doc.text(`Name: ${user.fullname}`);
         doc.text(`Ticket ID: ${ticketID}`);
         doc.text(`Category: ${user.ticketType}`);
-        doc.text(`Amount: Ksh ${user.amount}`);
+        doc.text(`Amount: Ksh ${amount}`);
+        doc.text(`Receipt: ${receipt}`);
         doc.image(qr, { fit: [150, 150] });
+
         doc.end();
 
-        stream.on("finish", () => {
+        stream.on("finish", async () => {
+
             issuedTickets[ticketID] = {
                 name: user.fullname,
                 email: user.email,
+                used: false,
                 category: user.ticketType,
-                amount: user.amount,
-                pdfPath
+                amount,
+                receipt,
+                pdfPath,
+                qr
             };
 
             delete pendingPayments[checkoutID];
