@@ -13,7 +13,6 @@ body{
   color:white;
 }
 
-/* ===== LANDING ===== */
 .hero{
   min-height:100vh;
   display:flex;
@@ -47,7 +46,6 @@ body{
   cursor:pointer;
 }
 
-/* ===== FORM ===== */
 .container{
   display:none;
   min-height:100vh;
@@ -85,11 +83,10 @@ button{
 
 <body>
 
-<!-- ===== LANDING ===== -->
+<!-- LANDING -->
 <div class="hero" id="landing">
 
 <h1>🏉 Rugby Duel 2026</h1>
-
 <p>Ultimate rugby showdown in Eldoret.</p>
 <p><b>Date & Venue:</b> To be confirmed</p>
 
@@ -105,7 +102,7 @@ button{
 
 </div>
 
-<!-- ===== TICKET FORM ===== -->
+<!-- TICKET FORM -->
 <div class="container" id="ticketSection">
 <div class="form-box">
 
@@ -122,7 +119,7 @@ button{
 
 <p class="slots" id="slotsInfo"></p>
 
-<button type="submit">Pay & Register</button>
+<button type="submit" id="ticketBtn">Pay & Register</button>
 <div class="message" id="ticketMsg"></div>
 </form>
 
@@ -131,7 +128,7 @@ button{
 </div>
 </div>
 
-<!-- ===== TEAM FORM ===== -->
+<!-- TEAM FORM -->
 <div class="container" id="teamSection">
 <div class="form-box">
 
@@ -139,13 +136,13 @@ button{
 
 <form id="teamForm">
 <input type="text" name="teamName" placeholder="Team Name" required>
-<input type="text" name="captain" placeholder="Captain Name" required>
+<input type="text" name="captainName" placeholder="Captain Name" required>
 <input type="tel" name="phone" placeholder="07xxxxxxxx" required>
 <input type="email" name="email" placeholder="Email" required>
 
 <p class="slots" id="teamSlots"></p>
 
-<button type="submit">Register Team</button>
+<button type="submit" id="teamBtn">Pay Ksh 5000</button>
 <div class="message" id="teamMsg"></div>
 </form>
 
@@ -155,7 +152,7 @@ button{
 </div>
 
 <script>
-// ===== NAVIGATION =====
+// NAVIGATION
 function showTicketForm(){
   landing.style.display="none";
   ticketSection.style.display="flex";
@@ -170,14 +167,14 @@ function goHome(){
   landing.style.display="flex";
 }
 
-// ===== VARIABLES =====
+// VARIABLES
 const ticketSelect = document.getElementById("ticketSelect");
 const slotsInfo = document.getElementById("slotsInfo");
 const teamSlots = document.getElementById("teamSlots");
 
 let currentSlots = {};
 
-// ===== LOAD TICKET SLOTS =====
+// LOAD TICKET SLOTS
 async function loadSlots(){
   try{
     const res = await fetch("/slots");
@@ -197,7 +194,7 @@ async function loadSlots(){
   }
 }
 
-// ===== LOAD TEAM SLOTS =====
+// LOAD TEAM SLOTS
 async function loadTeamSlots(){
   try{
     const res = await fetch("/team_slots");
@@ -218,9 +215,12 @@ setInterval(()=>{
 loadSlots();
 loadTeamSlots();
 
-// ===== TICKET SUBMIT =====
+// TICKET SUBMIT
 document.getElementById("ticketForm").addEventListener("submit", async (e)=>{
   e.preventDefault();
+
+  const btn = document.getElementById("ticketBtn");
+  btn.disabled = true;
 
   const formData = new FormData(e.target);
 
@@ -233,21 +233,71 @@ document.getElementById("ticketForm").addEventListener("submit", async (e)=>{
   document.getElementById("ticketMsg").textContent="Check phone for payment...";
 });
 
-// ===== TEAM SUBMIT =====
+// TEAM SUBMIT (UPDATED 🔥)
 document.getElementById("teamForm").addEventListener("submit", async (e)=>{
   e.preventDefault();
 
+  const btn = document.getElementById("teamBtn");
+  const msg = document.getElementById("teamMsg");
+
+  btn.disabled = true;
+  msg.textContent = "Sending STK push...";
+
   const formData = new FormData(e.target);
+  const data = Object.fromEntries(formData);
 
-  const res = await fetch("/register_team",{
-    method:"POST",
-    headers:{"Content-Type":"application/json"},
-    body:JSON.stringify(Object.fromEntries(formData))
-  });
+  try{
+    const res = await fetch("/register-team",{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify(data)
+    });
 
-  const data = await res.json();
+    const result = await res.json();
 
-  document.getElementById("teamMsg").textContent = data.message;
+    if(!res.ok){
+      throw new Error(result.message);
+    }
+
+    msg.textContent = "Check phone for payment...";
+
+    let attempts = 0;
+
+    const poll = setInterval(async ()=>{
+      attempts++;
+
+      const res = await fetch(`/team_status?email=${data.email}`);
+      const status = await res.json();
+
+      if(status.status === "paid"){
+        clearInterval(poll);
+
+        document.querySelector("#teamForm").innerHTML = `
+          <h2>✅ Team Registered Successfully</h2>
+          <p><b>Team:</b> ${status.team.teamName}</p>
+          <p><b>Captain:</b> ${status.team.captainName}</p>
+          <p><b>Status:</b> Confirmed</p>
+        `;
+      }
+
+      if(status.status === "failed"){
+        clearInterval(poll);
+        msg.textContent = "❌ Payment failed";
+        btn.disabled = false;
+      }
+
+      if(attempts > 20){
+        clearInterval(poll);
+        msg.textContent = "Session expired";
+        btn.disabled = false;
+      }
+
+    },3000);
+
+  }catch(err){
+    msg.textContent = err.message;
+    btn.disabled = false;
+  }
 });
 </script>
 
