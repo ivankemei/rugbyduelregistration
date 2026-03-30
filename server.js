@@ -37,12 +37,16 @@ const LIMITS = {
 // TEAM SYSTEM
 // =========================
 const TEAM_LIMIT = 8;
+const TEAM_PRICE = 5000;
+
 let teams = [];
+let pendingTeamPayments = {}; // 🔥 NEW
 
 // =========================
 let pendingPayments = {};
 let issuedTickets = {};
 let failedPayments = {};
+let failedTeamPayments = {}; // 🔥 NEW
 
 // =========================
 app.get("/", (req, res) => {
@@ -68,7 +72,7 @@ app.get("/slots", (req, res) => {
 });
 
 // =========================
-// TEAM SLOTS (FIXED ✅)
+// TEAM SLOTS
 // =========================
 function getTeamSlots() {
     return {
@@ -79,56 +83,12 @@ function getTeamSlots() {
     };
 }
 
-// Support BOTH routes
-app.get("/team_slots", (req, res) => {
-    res.json(getTeamSlots());
-});
-
 app.get("/team-slots", (req, res) => {
     res.json(getTeamSlots());
 });
 
 // =========================
-// TEAM REGISTRATION (FIXED ROUTES)
-// =========================
-function registerTeamHandler(req, res) {
-    const { teamName, captainName, phone } = req.body;
-
-    if (!teamName || !captainName || !phone) {
-        return res.status(400).json({ message: "All fields required" });
-    }
-
-    if (teams.length >= TEAM_LIMIT) {
-        return res.status(400).json({ message: "All team slots are taken" });
-    }
-
-    const exists = teams.find(
-        t => t.teamName.toLowerCase() === teamName.toLowerCase()
-    );
-
-    if (exists) {
-        return res.status(400).json({ message: "Team already registered" });
-    }
-
-    const team = {
-        id: "TEAM-" + Date.now(),
-        teamName,
-        captainName,
-        phone
-    };
-
-    teams.push(team);
-
-    res.json({
-        message: "Team registered successfully",
-        team
-    });
-}
-
-// Support BOTH routes
-app.post("/register_team", registerTeamHandler);
-app.post("/register-team", registerTeamHandler);
-
+// ACCESS TOKEN
 // =========================
 async function getAccessToken() {
     const auth = Buffer.from(`${consumerKey}:${consumerSecret}`).toString("base64");
@@ -142,29 +102,31 @@ async function getAccessToken() {
 }
 
 // =========================
-// REGISTER
+// 🆕 TEAM REGISTER (WITH PAYMENT)
 // =========================
-app.post("/register", async (req, res) => {
+app.post("/register-team", async (req, res) => {
 
-    let { fullname, phone, email, ticket: ticketType } = req.body;
+    let { teamName, captainName, phone } = req.body;
 
-    if (phone.startsWith("07")) phone = "254" + phone.substring(1);
-    if (phone.startsWith("+254")) phone = phone.substring(1);
-
-    const currentCount = getCategoryCount(ticketType);
-    const limit = LIMITS[ticketType];
-
-    if (currentCount >= limit) {
-        return res.status(400).json({ message: "Category is full" });
+    if (!teamName || !captainName || !phone) {
+        return res.status(400).json({ message: "All fields required" });
     }
 
-    const prices = {
-        skill_showcase: 1000,
-        head_to_head: 1000,
-        spectator: 500
-    };
+    if (teams.length >= TEAM_LIMIT) {
+        return res.status(400).json({ message: "All team slots are taken" });
+    }
 
-    const amount = prices[ticketType] || 50;
+    const exists = teams.find(t =>
+        t.teamName.toLowerCase() === teamName.toLowerCase()
+    );
+
+    if (exists) {
+        return res.status(400).json({ message: "Team already registered" });
+    }
+
+    // FORMAT PHONE
+    if (phone.startsWith("07")) phone = "254" + phone.substring(1);
+    if (phone.startsWith("+254")) phone = phone.substring(1);
 
     try {
         const token = await getAccessToken();
@@ -179,37 +141,35 @@ app.post("/register", async (req, res) => {
                 Password: password,
                 Timestamp: timestamp,
                 TransactionType: "CustomerBuyGoodsOnline",
-                Amount: amount,
+                Amount: TEAM_PRICE,
                 PartyA: phone,
                 PartyB: "6691976",
                 PhoneNumber: phone,
                 CallBackURL: callbackURL,
-                AccountReference: "RUGBY DUEL",
-                TransactionDesc: "Ticket Payment"
+                AccountReference: "TEAM ENTRY",
+                TransactionDesc: "Team Registration"
             },
             { headers: { Authorization: `Bearer ${token}` } }
         );
 
         const checkoutID = response.data.CheckoutRequestID;
 
-        pendingPayments[checkoutID] = {
-            fullname,
-            phone,
-            email,
-            ticketType,
-            amount
+        pendingTeamPayments[checkoutID] = {
+            teamName,
+            captainName,
+            phone
         };
 
-        res.json({ message: "STK push sent" });
+        res.json({ message: "STK push sent for team registration" });
 
     } catch (error) {
-        console.error("STK ERROR:", error.response?.data || error.message);
-        res.status(500).json({ message: "Payment failed." });
+        console.error("TEAM STK ERROR:", error.response?.data || error.message);
+        res.status(500).json({ message: "Team payment failed" });
     }
 });
 
 // =========================
-// CALLBACK (UNCHANGED)
+// CALLBACK (UPDATED)
 // =========================
 app.post("/callback", async (req, res) => {
 
@@ -220,6 +180,31 @@ app.post("/callback", async (req, res) => {
         const checkoutID = callback.CheckoutRequestID;
         const resultCode = callback.ResultCode;
 
+        // ================= TEAM PAYMENT =================
+        const teamUser = pendingTeamPayments[checkoutID];
+
+        if (teamUser) {
+
+            if (resultCode !== 0) {
+                failedTeamPayments[teamUser.phone] = true;
+                delete pendingTeamPayments[checkoutID];
+                return res.json({ status: "failed" });
+            }
+
+            const team = {
+                id: "TEAM-" + Date.now(),
+                teamName: teamUser.teamName,
+                captainName: teamUser.captainName,
+                phone: teamUser.phone
+            };
+
+            teams.push(team);
+            delete pendingTeamPayments[checkoutID];
+
+            return res.json({ status: "team_registered" });
+        }
+
+        // ================= NORMAL TICKET FLOW =================
         const user = pendingPayments[checkoutID];
 
         if (resultCode !== 0) {
@@ -228,43 +213,7 @@ app.post("/callback", async (req, res) => {
             return res.json({ status: "failed" });
         }
 
-        if (!callback.CallbackMetadata) {
-            if (user) failedPayments[user.email] = true;
-            delete pendingPayments[checkoutID];
-            return res.json({ status: "failed" });
-        }
-
-        const metadata = callback.CallbackMetadata.Item || [];
-
-        let receipt = null;
-        let amount = null;
-
-        metadata.forEach(item => {
-            if (item.Name === "MpesaReceiptNumber") receipt = item.Value;
-            if (item.Name === "Amount") amount = item.Value;
-        });
-
-        if (!receipt || !amount) {
-            if (user) failedPayments[user.email] = true;
-            delete pendingPayments[checkoutID];
-            return res.json({ status: "failed" });
-        }
-
         if (!user) return res.json({ status: "user_not_found" });
-
-        const currentCount = getCategoryCount(user.ticketType);
-        const limit = LIMITS[user.ticketType];
-
-        if (currentCount >= limit) {
-            delete pendingPayments[checkoutID];
-            return res.json({ status: "limit_reached" });
-        }
-
-        const existing = Object.values(issuedTickets).find(t => t.receipt === receipt);
-        if (existing) {
-            delete pendingPayments[checkoutID];
-            return res.json({ status: "duplicate" });
-        }
 
         const ticketID = "RUGBY-" + Date.now();
         const qr = await QRCode.toDataURL(ticketID);
@@ -273,33 +222,25 @@ app.post("/callback", async (req, res) => {
         if (!fs.existsSync(dir)) fs.mkdirSync(dir);
 
         const pdfPath = path.join(dir, `${ticketID}.pdf`);
-        const doc = new PDFDocument({ size: "A4" });
+        const doc = new PDFDocument();
         const stream = fs.createWriteStream(pdfPath);
 
         doc.pipe(stream);
-
         doc.text("RUGBY DUEL TICKET");
         doc.text(`Name: ${user.fullname}`);
         doc.text(`Ticket ID: ${ticketID}`);
         doc.text(`Category: ${user.ticketType}`);
-        doc.text(`Amount: Ksh ${amount}`);
-        doc.text(`Receipt: ${receipt}`);
-
+        doc.text(`Amount: Ksh ${user.amount}`);
         doc.image(qr, { fit: [150, 150] });
-
         doc.end();
 
-        stream.on("finish", async () => {
-
+        stream.on("finish", () => {
             issuedTickets[ticketID] = {
                 name: user.fullname,
                 email: user.email,
-                used: false,
                 category: user.ticketType,
-                amount,
-                receipt,
-                pdfPath,
-                qr
+                amount: user.amount,
+                pdfPath
             };
 
             delete pendingPayments[checkoutID];
@@ -311,37 +252,6 @@ app.post("/callback", async (req, res) => {
         console.error("Callback Error:", err.message);
         res.json({ status: "error" });
     }
-});
-
-// =========================
-// STATUS
-// =========================
-app.get("/ticket_status", (req, res) => {
-
-    const email = req.query.email;
-
-    if (failedPayments[email]) {
-        delete failedPayments[email];
-        return res.json({ status: "failed" });
-    }
-
-    const entry = Object.entries(issuedTickets).find(([id, t]) => t.email === email);
-
-    if (entry) {
-        const [id, t] = entry;
-        return res.json({
-            status: "paid",
-            ticket: {
-                id,
-                name: t.name,
-                category: t.category,
-                amount: t.amount,
-                qr: t.qr
-            }
-        });
-    }
-
-    res.json({ status: "pending" });
 });
 
 // =========================
