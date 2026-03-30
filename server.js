@@ -34,6 +34,12 @@ const LIMITS = {
 };
 
 // =========================
+// 🆕 TEAM LIMIT SYSTEM
+// =========================
+const TEAM_LIMIT = 8;
+let teams = [];
+
+// =========================
 let pendingPayments = {};
 let issuedTickets = {};
 let failedPayments = {};
@@ -51,7 +57,7 @@ function getCategoryCount(category) {
 }
 
 // =========================
-// SLOTS ENDPOINT (🔥 FIX)
+// SLOTS ENDPOINT
 // =========================
 app.get("/slots", (req, res) => {
 
@@ -61,6 +67,55 @@ app.get("/slots", (req, res) => {
     };
 
     res.json(remaining);
+});
+
+// =========================
+// 🆕 TEAM SLOTS ENDPOINT
+// =========================
+app.get("/team-slots", (req, res) => {
+    res.json({
+        total: TEAM_LIMIT,
+        registered: teams.length,
+        remaining: TEAM_LIMIT - teams.length,
+        teams
+    });
+});
+
+// =========================
+// 🆕 TEAM REGISTRATION
+// =========================
+app.post("/register-team", (req, res) => {
+
+    const { teamName, captainName, phone } = req.body;
+
+    if (!teamName || !captainName || !phone) {
+        return res.status(400).json({ message: "All fields required" });
+    }
+
+    // LIMIT CHECK
+    if (teams.length >= TEAM_LIMIT) {
+        return res.status(400).json({ message: "All team slots are taken" });
+    }
+
+    // DUPLICATE TEAM NAME CHECK
+    const exists = teams.find(t => t.teamName.toLowerCase() === teamName.toLowerCase());
+    if (exists) {
+        return res.status(400).json({ message: "Team already registered" });
+    }
+
+    const team = {
+        id: "TEAM-" + Date.now(),
+        teamName,
+        captainName,
+        phone
+    };
+
+    teams.push(team);
+
+    res.json({
+        message: "Team registered successfully",
+        team
+    });
 });
 
 // =========================
@@ -85,7 +140,7 @@ app.post("/register", async (req, res) => {
     if (phone.startsWith("07")) phone = "254" + phone.substring(1);
     if (phone.startsWith("+254")) phone = phone.substring(1);
 
-    // ✅ LIMIT CHECK BEFORE STK
+    // LIMIT CHECK
     const currentCount = getCategoryCount(ticketType);
     const limit = LIMITS[ticketType];
 
@@ -159,7 +214,6 @@ app.post("/callback", async (req, res) => {
 
         const user = pendingPayments[checkoutID];
 
-        // ❌ CANCEL / FAIL
         if (resultCode !== 0) {
             if (user) failedPayments[user.email] = true;
             delete pendingPayments[checkoutID];
@@ -190,17 +244,14 @@ app.post("/callback", async (req, res) => {
 
         if (!user) return res.json({ status: "user_not_found" });
 
-        // ✅ FINAL LIMIT CHECK (race condition protection)
         const currentCount = getCategoryCount(user.ticketType);
         const limit = LIMITS[user.ticketType];
 
         if (currentCount >= limit) {
-            console.log("Limit reached after payment");
             delete pendingPayments[checkoutID];
             return res.json({ status: "limit_reached" });
         }
 
-        // ✅ DUPLICATE CHECK
         const existing = Object.values(issuedTickets).find(t => t.receipt === receipt);
         if (existing) {
             delete pendingPayments[checkoutID];
