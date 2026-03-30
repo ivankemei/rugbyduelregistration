@@ -40,8 +40,9 @@ const TEAM_LIMIT = 8;
 const TEAM_PRICE = 5000;
 
 let teams = [];
-let pendingTeamPayments = {}; // ✅ NEW
-let failedTeamPayments = {};  // ✅ NEW
+let pendingTeamPayments = {};
+let failedTeamPayments = {};
+let completedTeamPayments = {}; // ✅ NEW
 
 // =========================
 let pendingPayments = {};
@@ -61,7 +62,7 @@ function getCategoryCount(category) {
 }
 
 // =========================
-// SLOTS ENDPOINT (UNCHANGED ✅)
+// SLOTS ENDPOINT
 // =========================
 app.get("/slots", (req, res) => {
     const remaining = {
@@ -72,7 +73,7 @@ app.get("/slots", (req, res) => {
 });
 
 // =========================
-// TEAM SLOTS (UNCHANGED ✅)
+// TEAM SLOTS
 // =========================
 function getTeamSlots() {
     return {
@@ -83,22 +84,17 @@ function getTeamSlots() {
     };
 }
 
-app.get("/team_slots", (req, res) => {
-    res.json(getTeamSlots());
-});
-
-app.get("/team-slots", (req, res) => {
-    res.json(getTeamSlots());
-});
+app.get("/team_slots", (req, res) => res.json(getTeamSlots()));
+app.get("/team-slots", (req, res) => res.json(getTeamSlots()));
 
 // =========================
-// TEAM REGISTRATION (UPDATED 🔥 WITH PAYMENT)
+// TEAM REGISTER (STK)
 // =========================
 app.post("/register-team", async (req, res) => {
 
-    let { teamName, captainName, phone } = req.body;
+    let { teamName, captainName, phone, email } = req.body;
 
-    if (!teamName || !captainName || !phone) {
+    if (!teamName || !captainName || !phone || !email) {
         return res.status(400).json({ message: "All fields required" });
     }
 
@@ -114,7 +110,6 @@ app.post("/register-team", async (req, res) => {
         return res.status(400).json({ message: "Team already registered" });
     }
 
-    // FORMAT PHONE
     if (phone.startsWith("07")) phone = "254" + phone.substring(1);
     if (phone.startsWith("+254")) phone = phone.substring(1);
 
@@ -147,7 +142,8 @@ app.post("/register-team", async (req, res) => {
         pendingTeamPayments[checkoutID] = {
             teamName,
             captainName,
-            phone
+            phone,
+            email
         };
 
         res.json({ message: "STK push sent for team" });
@@ -171,7 +167,30 @@ async function getAccessToken() {
 }
 
 // =========================
-// REGISTER (UNCHANGED ✅)
+// TEAM STATUS (NEW ✅)
+// =========================
+app.get("/team_status", (req, res) => {
+
+    const email = req.query.email;
+
+    if (failedTeamPayments[email]) {
+        delete failedTeamPayments[email];
+        return res.json({ status: "failed" });
+    }
+
+    if (completedTeamPayments[email]) {
+        const team = completedTeamPayments[email];
+        return res.json({
+            status: "paid",
+            team
+        });
+    }
+
+    res.json({ status: "pending" });
+});
+
+// =========================
+// REGISTER (UNCHANGED)
 // =========================
 app.post("/register", async (req, res) => {
 
@@ -238,7 +257,7 @@ app.post("/register", async (req, res) => {
 });
 
 // =========================
-// CALLBACK (UPDATED 🔥)
+// CALLBACK (UPDATED)
 // =========================
 app.post("/callback", async (req, res) => {
 
@@ -249,13 +268,13 @@ app.post("/callback", async (req, res) => {
         const checkoutID = callback.CheckoutRequestID;
         const resultCode = callback.ResultCode;
 
-        // ✅ TEAM PAYMENT FIRST
+        // ===== TEAM FLOW =====
         const teamUser = pendingTeamPayments[checkoutID];
 
         if (teamUser) {
 
             if (resultCode !== 0) {
-                failedTeamPayments[teamUser.phone] = true;
+                failedTeamPayments[teamUser.email] = true;
                 delete pendingTeamPayments[checkoutID];
                 return res.json({ status: "failed" });
             }
@@ -269,12 +288,40 @@ app.post("/callback", async (req, res) => {
 
             teams.push(team);
 
+            completedTeamPayments[teamUser.email] = team;
+
+            // ✅ EMAIL
+            try {
+                const transporter = nodemailer.createTransport({
+                    service: "gmail",
+                    auth: {
+                        user: process.env.EMAIL_USER,
+                        pass: process.env.EMAIL_PASS
+                    }
+                });
+
+                await transporter.sendMail({
+                    from: process.env.EMAIL_USER,
+                    to: teamUser.email,
+                    subject: "Team Registration Confirmed",
+                    html: `
+                        <h2>🏉 Rugby Duel Team Registered</h2>
+                        <p><b>Team:</b> ${team.teamName}</p>
+                        <p><b>Captain:</b> ${team.captainName}</p>
+                        <p><b>Status:</b> Confirmed</p>
+                    `
+                });
+
+            } catch (err) {
+                console.error("Team email error:", err.message);
+            }
+
             delete pendingTeamPayments[checkoutID];
 
             return res.json({ status: "team_registered" });
         }
 
-        // ================= NORMAL FLOW (UNCHANGED)
+        // ===== NORMAL FLOW (UNCHANGED) =====
         const user = pendingPayments[checkoutID];
 
         if (resultCode !== 0) {
@@ -283,30 +330,6 @@ app.post("/callback", async (req, res) => {
             return res.json({ status: "failed" });
         }
 
-        if (!callback.CallbackMetadata) {
-            if (user) failedPayments[user.email] = true;
-            delete pendingPayments[checkoutID];
-            return res.json({ status: "failed" });
-        }
-
-        const metadata = callback.CallbackMetadata.Item || [];
-
-        let receipt = null;
-        let amount = null;
-
-        metadata.forEach(item => {
-            if (item.Name === "MpesaReceiptNumber") receipt = item.Value;
-            if (item.Name === "Amount") amount = item.Value;
-        });
-
-        if (!receipt || !amount) {
-            if (user) failedPayments[user.email] = true;
-            delete pendingPayments[checkoutID];
-            return res.json({ status: "failed" });
-        }
-
-        if (!user) return res.json({ status: "user_not_found" });
-
         const ticketID = "RUGBY-" + Date.now();
         const qr = await QRCode.toDataURL(ticketID);
 
@@ -314,30 +337,24 @@ app.post("/callback", async (req, res) => {
         if (!fs.existsSync(dir)) fs.mkdirSync(dir);
 
         const pdfPath = path.join(dir, `${ticketID}.pdf`);
-        const doc = new PDFDocument({ size: "A4" });
+        const doc = new PDFDocument();
         const stream = fs.createWriteStream(pdfPath);
 
         doc.pipe(stream);
-
         doc.text("RUGBY DUEL TICKET");
         doc.text(`Name: ${user.fullname}`);
         doc.text(`Ticket ID: ${ticketID}`);
         doc.text(`Category: ${user.ticketType}`);
-        doc.text(`Amount: Ksh ${amount}`);
-        doc.text(`Receipt: ${receipt}`);
+        doc.text(`Amount: Ksh ${user.amount}`);
         doc.image(qr, { fit: [150, 150] });
-
         doc.end();
 
-        stream.on("finish", async () => {
-
+        stream.on("finish", () => {
             issuedTickets[ticketID] = {
                 name: user.fullname,
                 email: user.email,
-                used: false,
                 category: user.ticketType,
-                amount,
-                receipt,
+                amount: user.amount,
                 pdfPath,
                 qr
             };
