@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Rugby Duel Event</title>
 
+<script src="https://unpkg.com/html5-qrcode"></script>
+
 <style>
 *{margin:0;padding:0;box-sizing:border-box;font-family:Arial;}
 
@@ -14,17 +16,42 @@ body{
 }
 
 .hero{
-  height:100vh;
+  min-height:100vh;
   display:flex;
   flex-direction:column;
   justify-content:center;
   align-items:center;
   text-align:center;
+  padding:20px;
+}
+
+.categories{
+  margin:20px 0;
+  width:100%;
+  max-width:600px;
+}
+
+.categories div{
+  margin:10px 0;
+  padding:12px;
+  background:rgba(255,255,255,0.1);
+  border-radius:8px;
+  text-align:left;
+}
+
+.btn{
+  margin:10px;
+  padding:14px 25px;
+  border:none;
+  border-radius:8px;
+  background:#1a237e;
+  color:white;
+  cursor:pointer;
 }
 
 .container{
   display:none;
-  height:100vh;
+  min-height:100vh;
   justify-content:center;
   align-items:center;
 }
@@ -52,10 +79,18 @@ button{
   border:none;
 }
 
-button:disabled{background:#aaa;}
+.slots{font-size:14px;color:#1a237e;margin-top:5px;}
+.message{margin-top:10px;font-weight:bold;}
 
-.message{margin-top:15px;font-weight:bold;}
-.slots{font-size:14px;color:#1a237e;}
+.admin-flex{
+  display:flex;
+  flex-direction:column;
+  gap:15px;
+}
+
+#reader{
+  display:none;
+}
 </style>
 </head>
 
@@ -64,99 +99,237 @@ button:disabled{background:#aaa;}
 <!-- LANDING -->
 <div class="hero" id="landing">
 <h1>🏉 Rugby Duel 2026</h1>
-<p>Ultimate 1v1 Rugby Showdown.</p>
-<p>Skill Showcase - Technical non-contact challenges.</p>
-<p>Head-to-Head - Full contact battles.</p>
-<p>Limited slots.</p>
+<p>Ultimate rugby showdown in Eldoret.</p>
+<p><b>Date & Venue:</b> To be confirmed</p>
 
-<button onclick="startRegistration()">Register Now</button>
+<div class="categories">
+<div>
+<b>🔥 Skill Showcase</b><br>
+Test your individual rugby skills — speed, agility, ball control, and creativity.
 </div>
 
-<!-- FORM -->
-<div class="container" id="formSection">
-<div class="form-box" id="container">
+<div>
+<b>💥 Head-to-Head</b><br>
+1v1 rugby battles. Strength, strategy, and dominance decide the winner.
+</div>
 
-<h2>Register</h2>
+<div>
+<b>🏉 Rugby 7s</b><br>
+Team-based competition. Register your squad and compete for glory.
+</div>
+
+<div>
+<b>👀 Spectator</b><br>
+Come watch the action live, support teams, and enjoy the atmosphere.
+</div>
+</div>
+
+<button class="btn" onclick="showTicketForm()">Register Ticket</button>
+<button class="btn" onclick="showTeamForm()">Register Team</button>
+<button class="btn" id="adminBtn" onclick="showAdminLogin()">Admin</button>
+</div>
+
+<!-- TICKET -->
+<div class="container" id="ticketSection">
+<div class="form-box">
+<h2>Ticket Registration</h2>
 
 <form id="ticketForm">
 <input type="text" name="fullname" placeholder="Full Name" required>
-<input type="email" name="email" placeholder="Email" required>
-<input type="tel" name="phone" placeholder="07xxxxxxxx" required>
+<input type="email" name="email" placeholder="Email Address" required>
+<input type="tel" name="phone" placeholder="Phone Number" required>
 
-<select name="ticket" id="ticketSelect" required>
-<option value="">Loading tickets...</option>
-</select>
+<select name="ticket" id="ticketSelect" required></select>
 
 <p class="slots" id="slotsInfo"></p>
 
-<button type="submit" id="payBtn">Pay & Register</button>
-<div class="message" id="message"></div>
+<button type="submit" id="ticketBtn">Pay & Register</button>
+<div class="message" id="ticketMsg"></div>
 </form>
 
+<button onclick="goHome()">⬅ Back</button>
+</div>
+</div>
+
+<!-- TEAM -->
+<div class="container" id="teamSection">
+<div class="form-box">
+
+<h2>🏉 Team Registration</h2>
+
+<form id="teamForm">
+<input name="teamName" placeholder="Team Name" required>
+<input name="captainName" placeholder="Captain Name" required>
+<input name="phone" placeholder="Phone Number" required>
+<input name="email" placeholder="Email Address" required>
+
+<p class="slots" id="teamSlots">Loading team slots...</p>
+
+<button type="submit" id="teamBtn">Pay 5000</button>
+<div class="message" id="teamMsg"></div>
+</form>
+
+<button onclick="goHome()">⬅ Back</button>
+</div>
+</div>
+
+<!-- ADMIN LOGIN -->
+<div class="container" id="adminLogin">
+<div class="form-box">
+<h2>Admin Login</h2>
+<input id="adminPass" type="password" placeholder="Password">
+<button onclick="loginAdmin()">Login</button>
+</div>
+</div>
+
+<!-- ADMIN DASHBOARD -->
+<div class="container" id="adminDash">
+<div class="form-box admin-flex">
+<h2>Dashboard</h2>
+<p id="adminData">Loading data...</p>
+
+<button onclick="toggleScanner()">📷 Scan Ticket</button>
+<div id="reader"></div>
+<p id="scanResult"></p>
+
+<button onclick="logoutAdmin()">Logout</button>
 </div>
 </div>
 
 <script>
-function startRegistration(){
-  document.getElementById("landing").style.display="none";
-  document.getElementById("formSection").style.display="flex";
+
+// ADMIN STATE
+let isAdminLoggedIn = false;
+
+// 🔒 HIDE ADMIN BUTTON ON LOAD
+document.getElementById("adminBtn").style.display = "none";
+
+// SECRET KEY (change this)
+const ADMIN_KEY = "showadmin";
+
+// UNLOCK ADMIN BUTTON (type ?admin=showadmin in URL)
+if(window.location.search.includes("admin=" + ADMIN_KEY)){
+  document.getElementById("adminBtn").style.display = "block";
 }
 
-const form = document.getElementById("ticketForm");
-const messageDiv = document.getElementById("message");
-const button = document.getElementById("payBtn");
+// NAVIGATION
+function hideAll(){
+  document.getElementById("landing").style.display="none";
+  document.getElementById("ticketSection").style.display="none";
+  document.getElementById("teamSection").style.display="none";
+  document.getElementById("adminLogin").style.display="none";
+  document.getElementById("adminDash").style.display="none";
+}
+
+function showTicketForm(){ hideAll(); document.getElementById("ticketSection").style.display="flex"; }
+function showTeamForm(){ hideAll(); document.getElementById("teamSection").style.display="flex"; }
+function showAdminLogin(){ hideAll(); document.getElementById("adminLogin").style.display="flex"; }
+
+function goHome(){
+  hideAll();
+  document.getElementById("landing").style.display="flex";
+}
+
+// ADMIN LOGIN
+function loginAdmin(){
+  const pass = document.getElementById("adminPass").value;
+
+  if(pass === "admin123"){
+    isAdminLoggedIn = true;
+
+    hideAll();
+    document.getElementById("adminDash").style.display="flex";
+
+    loadAdminData();
+
+  } else {
+    alert("Wrong password");
+  }
+}
+
+// LOGOUT
+function logoutAdmin(){
+  isAdminLoggedIn = false;
+  goHome();
+}
+
+// ================= ADMIN DATA =================
+async function loadAdminData(){
+  try{
+    const res = await fetch("/admin-data");
+    const data = await res.json();
+
+    document.getElementById("adminData").innerHTML = `
+      👥 Total Registrations: ${data.total || 0}<br>
+      🔥 Skill Showcase: ${data.skill_showcase || 0}<br>
+      💥 Head-to-Head: ${data.head_to_head || 0}<br>
+      👀 Spectators: ${data.spectator || 0}<br>
+      🏉 Teams: ${data.teams || 0}
+    `;
+  }catch{
+    document.getElementById("adminData").textContent = "⚠ Unable to load data";
+  }
+}
+
+setInterval(()=>{
+  if(isAdminLoggedIn){
+    loadAdminData();
+  }
+},5000);
+
+// QR
+let scanner;
+function toggleScanner(){
+  const reader = document.getElementById("reader");
+
+  if(reader.style.display === "none"){
+    reader.style.display = "block";
+
+    scanner = new Html5Qrcode("reader");
+    scanner.start(
+      { facingMode: "environment" },
+      { fps: 10, qrbox: 250 },
+      (decodedText) => {
+        document.getElementById("scanResult").textContent = decodedText;
+      }
+    );
+  } else {
+    reader.style.display = "none";
+    if(scanner) scanner.stop();
+  }
+}
+
+// ================= LIVE TICKET SLOTS =================
 const ticketSelect = document.getElementById("ticketSelect");
 const slotsInfo = document.getElementById("slotsInfo");
 
 let currentSlots = {};
 
-// ================= LOAD SLOTS =================
 async function loadSlots(){
   try{
-    const selectedValue = ticketSelect.value; // ✅ SAVE selection
+    const selected = ticketSelect.value;
 
     const res = await fetch("/slots");
-    if(!res.ok) throw new Error("Server error");
-
     const data = await res.json();
+
     currentSlots = data;
 
     ticketSelect.innerHTML = `
-      <option value="">Select Ticket Type</option>
-      <option value="skill_showcase" ${data.skill_showcase===0?"disabled":""}>
-        Skill Showcase (${data.skill_showcase} left)
-      </option>
-      <option value="head_to_head" ${data.head_to_head===0?"disabled":""}>
-        Head to Head (${data.head_to_head} left)
-      </option>
-      <option value="spectator">
-        Spectator (Unlimited)
-      </option>
+      <option value="">Select Ticket</option>
+      <option value="skill_showcase">Skill (${data.skill_showcase} left)</option>
+      <option value="head_to_head">Head (${data.head_to_head} left)</option>
+      <option value="spectator">Spectator (Unlimited)</option>
     `;
 
-    // ✅ RESTORE selection
-    if(selectedValue){
-      ticketSelect.value = selectedValue;
-    }
+    if(selected) ticketSelect.value = selected;
 
-    // ✅ UPDATE SLOT TEXT AGAIN
     updateSlotText();
 
-  }catch(err){
-    console.error("Slots error:", err);
-
-    ticketSelect.innerHTML = `
-      <option value="">Select Ticket Type</option>
-      <option value="skill_showcase">Skill Showcase</option>
-      <option value="head_to_head">Head to Head</option>
-      <option value="spectator">Spectator</option>
-    `;
-
-    slotsInfo.textContent = "⚠ Unable to load live slots";
+  }catch{
+    slotsInfo.textContent="⚠ Error loading slots";
   }
 }
 
-// ================= UPDATE SLOT TEXT =================
 function updateSlotText(){
   const val = ticketSelect.value;
 
@@ -170,96 +343,75 @@ function updateSlotText(){
   }
 }
 
-// ================= EVENTS =================
 ticketSelect.addEventListener("change", updateSlotText);
-
-// refresh slots every 5 seconds
 setInterval(loadSlots, 5000);
 loadSlots();
 
-// ================= SUBMIT =================
-form.addEventListener("submit", async (e)=>{
+// ================= TEAM DISPLAY =================
+const teamSlots = document.getElementById("teamSlots");
+const TEAM_LIMIT = 8;
+
+async function loadTeamSlots(){
+  try{
+    const res = await fetch("/team-slots");
+    const data = await res.json();
+
+    const remaining = TEAM_LIMIT - (data.registered || 0);
+    teamSlots.textContent = remaining > 0 
+      ? `⚡ ${remaining} team slots remaining`
+      : "❌ Team slots full";
+  }catch{
+    teamSlots.textContent = "⚡ Limited to 8 teams";
+  }
+}
+
+setInterval(loadTeamSlots,5000);
+loadTeamSlots();
+
+// ================= TICKET SUBMIT =================
+document.getElementById("ticketForm").addEventListener("submit", async (e)=>{
   e.preventDefault();
 
-  if(!ticketSelect.value){
-    messageDiv.textContent = "⚠ Please select a ticket type";
-    return;
-  }
+  const msg = document.getElementById("ticketMsg");
+  const btn = document.getElementById("ticketBtn");
 
-  button.disabled = true;
-  form.style.display = "none";
-  messageDiv.textContent = "Sending STK push...";
+  btn.disabled=true;
+  msg.textContent="Processing...";
 
-  const formData = new FormData(form);
-  const data = {
-    fullname: formData.get("fullname"),
-    email: formData.get("email"),
-    phone: formData.get("phone"),
-    ticket: formData.get("ticket")
-  };
+  const data = Object.fromEntries(new FormData(e.target));
 
-  try{
-    const response = await fetch("/register",{
-      method:"POST",
-      headers:{"Content-Type":"application/json"},
-      body:JSON.stringify(data)
-    });
+  const res = await fetch("/register",{
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify(data)
+  });
 
-    const result = await response.json();
-
-    if(!response.ok){
-      throw new Error(result.message || "Registration failed");
-    }
-
-    messageDiv.textContent = "Check your phone...";
-
-    let attempts = 0;
-
-    const poll = setInterval(async ()=>{
-      attempts++;
-
-      const res = await fetch(`/ticket_status?email=${data.email}`);
-      const ticketData = await res.json();
-
-      if(ticketData.status==="paid"){
-        clearInterval(poll);
-        showTicket(ticketData.ticket);
-      }
-
-      if(ticketData.status==="failed"){
-        clearInterval(poll);
-        messageDiv.textContent="❌ Payment cancelled";
-        form.style.display="block";
-        button.disabled=false;
-      }
-
-      if(attempts>20){
-        clearInterval(poll);
-        messageDiv.textContent="Session expired";
-        form.style.display="block";
-        button.disabled=false;
-      }
-
-    },3000);
-
-  }catch(err){
-    messageDiv.textContent=err.message;
-    form.style.display="block";
-    button.disabled=false;
-  }
+  const result = await res.json();
+  msg.textContent = result.message || "Check phone";
 });
 
-// ================= SHOW TICKET =================
-function showTicket(ticket){
-  document.getElementById("container").innerHTML=`
-    <h2>🎟 Ticket</h2>
-    <p><b>Name:</b> ${ticket.name}</p>
-    <p><b>ID:</b> ${ticket.id}</p>
-    <p><b>Category:</b> ${ticket.category}</p>
-    <p><b>Amount:</b> Ksh ${ticket.amount}</p>
-    <a href="/download/${ticket.id}">Download Ticket</a>
-  `;
-}
+// ================= TEAM SUBMIT =================
+document.getElementById("teamForm").addEventListener("submit", async (e)=>{
+  e.preventDefault();
+
+  const msg = document.getElementById("teamMsg");
+  const btn = document.getElementById("teamBtn");
+
+  btn.disabled = true;
+  msg.textContent = "Processing...";
+
+  const data = Object.fromEntries(new FormData(e.target));
+
+  const res = await fetch("/register-team",{
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify(data)
+  });
+
+  const result = await res.json();
+  msg.textContent = result.message || "Check phone";
+});
+
 </script>
 
 </body>
