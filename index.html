@@ -110,7 +110,7 @@ button{
 
 <button class="btn" onclick="showTicketForm()">Register Ticket</button>
 <button class="btn" onclick="showTeamForm()">Register Team</button>
-<button class="btn" onclick="showAdminLogin()">Admin</button>
+<button class="btn" id="adminBtn" onclick="showAdminLogin()">Admin</button>
 </div>
 
 <!-- TICKET -->
@@ -170,17 +170,20 @@ button{
 <div class="container" id="adminDash">
 <div class="form-box admin-flex">
 <h2>Dashboard</h2>
-<p id="adminData"></p>
+<p id="adminData">Loading data...</p>
 
 <button onclick="toggleScanner()">📷 Scan Ticket</button>
 <div id="reader"></div>
 <p id="scanResult"></p>
 
-<button onclick="goHome()">Logout</button>
+<button onclick="logoutAdmin()">Logout</button>
 </div>
 </div>
 
 <script>
+
+// ADMIN STATE
+let isAdminLoggedIn = false;
 
 // NAVIGATION
 function hideAll(){
@@ -205,12 +208,53 @@ function loginAdmin(){
   const pass = document.getElementById("adminPass").value;
 
   if(pass === "admin123"){
+    isAdminLoggedIn = true;
+
+    // 🔒 Hide admin button from public view
+    document.getElementById("adminBtn").style.display = "none";
+
     hideAll();
     document.getElementById("adminDash").style.display="flex";
+
+    loadAdminData();
+
   } else {
     alert("Wrong password");
   }
 }
+
+// LOGOUT
+function logoutAdmin(){
+  isAdminLoggedIn = false;
+
+  document.getElementById("adminBtn").style.display = "block";
+
+  goHome();
+}
+
+// ================= ADMIN DATA =================
+async function loadAdminData(){
+  try{
+    const res = await fetch("/admin-data");
+    const data = await res.json();
+
+    document.getElementById("adminData").innerHTML = `
+      👥 Total Registrations: ${data.total || 0}<br>
+      🔥 Skill Showcase: ${data.skill_showcase || 0}<br>
+      💥 Head-to-Head: ${data.head_to_head || 0}<br>
+      👀 Spectators: ${data.spectator || 0}<br>
+      🏉 Teams: ${data.teams || 0}
+    `;
+  }catch{
+    document.getElementById("adminData").textContent = "⚠ Unable to load data";
+  }
+}
+
+setInterval(()=>{
+  if(isAdminLoggedIn){
+    loadAdminData();
+  }
+},5000);
 
 // QR
 let scanner;
@@ -288,7 +332,7 @@ const TEAM_LIMIT = 8;
 
 async function loadTeamSlots(){
   try{
-    const res = await fetch("/team-slots"); // optional
+    const res = await fetch("/team-slots");
     const data = await res.json();
 
     const remaining = TEAM_LIMIT - (data.registered || 0);
