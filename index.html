@@ -36,6 +36,7 @@ body{
   padding:12px;
   background:rgba(255,255,255,0.1);
   border-radius:8px;
+  text-align:left;
 }
 
 .btn{
@@ -102,10 +103,25 @@ button{
 <p><b>Date & Venue:</b> To be confirmed</p>
 
 <div class="categories">
-<div><b>🔥 Skill Showcase</b></div>
-<div><b>💥 Head-to-Head</b></div>
-<div><b>🏉 Rugby 7s</b></div>
-<div><b>👀 Spectator</b></div>
+<div>
+<b>🔥 Skill Showcase</b><br>
+Test your individual rugby skills — speed, agility, ball control, and creativity.
+</div>
+
+<div>
+<b>💥 Head-to-Head</b><br>
+1v1 rugby battles. Strength, strategy, and dominance decide the winner.
+</div>
+
+<div>
+<b>🏉 Rugby 7s</b><br>
+Team-based competition. Register your squad and compete for glory.
+</div>
+
+<div>
+<b>👀 Spectator</b><br>
+Come watch the action live, support teams, and enjoy the atmosphere.
+</div>
 </div>
 
 <button class="btn" onclick="showTicketForm()">Register Ticket</button>
@@ -185,6 +201,17 @@ button{
 // ADMIN STATE
 let isAdminLoggedIn = false;
 
+// 🔒 HIDE ADMIN BUTTON ON LOAD
+document.getElementById("adminBtn").style.display = "none";
+
+// SECRET KEY (change this)
+const ADMIN_KEY = "showadmin";
+
+// UNLOCK ADMIN BUTTON (type ?admin=showadmin in URL)
+if(window.location.search.includes("admin=" + ADMIN_KEY)){
+  document.getElementById("adminBtn").style.display = "block";
+}
+
 // NAVIGATION
 function hideAll(){
   document.getElementById("landing").style.display="none";
@@ -210,9 +237,6 @@ function loginAdmin(){
   if(pass === "admin123"){
     isAdminLoggedIn = true;
 
-    // 🔒 Hide admin button from public view
-    document.getElementById("adminBtn").style.display = "none";
-
     hideAll();
     document.getElementById("adminDash").style.display="flex";
 
@@ -226,9 +250,6 @@ function loginAdmin(){
 // LOGOUT
 function logoutAdmin(){
   isAdminLoggedIn = false;
-
-  document.getElementById("adminBtn").style.display = "block";
-
   goHome();
 }
 
