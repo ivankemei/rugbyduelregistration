@@ -5,8 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Rugby Duel Event</title>
 
-<script src="https://unpkg.com/html5-qrcode"></script>
-
 <style>
 *{margin:0;padding:0;box-sizing:border-box;font-family:Arial;}
 
@@ -15,12 +13,10 @@ body{
   color:white;
 }
 
-/* ✅ FIX: allow sections to actually display */
 .hero, .container{
   display:flex;
 }
 
-/* keep container hidden initially */
 .container{
   display:none;
   min-height:100vh;
@@ -28,7 +24,6 @@ body{
   align-items:center;
 }
 
-/* ensure landing works properly */
 .hero{
   min-height:100vh;
   flex-direction:column;
@@ -62,7 +57,6 @@ body{
   cursor:pointer;
 }
 
-/* FIX: admin button hidden */
 #adminBtn{
   display:none !important;
 }
@@ -74,6 +68,11 @@ body{
   border-radius:12px;
   width:95%;
   max-width:420px;
+
+  /* ✅ IMPORTANT FIX */
+  position:relative;
+  z-index:1;
+  overflow:visible;
 }
 
 input,select{
@@ -82,20 +81,26 @@ input,select{
   margin:10px 0;
 }
 
+/* ✅ CRITICAL FIX FOR DROPDOWN VISIBILITY */
+select{
+  position:relative;
+  z-index:9999;
+}
+
 button{
   width:40%;
   padding:13px;
   background:#1a237e;
   color:white;
   border:none;
+  position:relative;
+  z-index:1;
 }
 
 .slots{font-size:14px;color:#1a237e;margin-top:5px;}
 .message{margin-top:10px;font-weight:bold;}
 
-#reader{ display:none; }
-
-/* LOADING OVERLAY */
+/* overlay */
 #paymentOverlay{
   position:fixed;
   top:0;
@@ -128,48 +133,20 @@ button{
 
 <body>
 
-<!-- LOADING -->
-<div id="paymentOverlay">
-  <div class="loader"></div>
-  <p style="margin-top:15px;">Waiting for M-Pesa...</p>
-</div>
-
-<!-- LANDING -->
 <div class="hero" id="landing">
 
 <h1>🏉 Rugby Duel 2026</h1>
-<p>Ultimate rugby showdown in Eldoret.</p>
-<p><b>Date & Venue:</b> To be confirmed</p>
 
-<!-- ✅ FIX: ensure categories visible -->
 <div class="categories">
-
-<div>
-<b>🔥 Skill Showcase</b><br>
-Test your individual rugby skills — speed, agility, ball control, and creativity.
-</div>
-
-<div>
-<b>💥 Head-to-Head</b><br>
-1v1 rugby battles. Strength, strategy, and dominance decide the winner.
-</div>
-
-<div>
-<b>🏉 Rugby 7s</b><br>
-Team-based competition. Register your squad and compete for glory.
-</div>
-
-<div>
-<b>👀 Spectator</b><br>
-Come watch the action live, support teams, and enjoy the atmosphere.
-</div>
-
+<div><b>🔥 Skill Showcase</b><br>Test your individual rugby skills.</div>
+<div><b>💥 Head-to-Head</b><br>1v1 rugby battles.</div>
+<div><b>🏉 Rugby 7s</b><br>Team competition.</div>
+<div><b>👀 Spectator</b><br>Watch live.</div>
 </div>
 
 <button class="btn" onclick="showTicketForm()">Register Ticket</button>
 <button class="btn" onclick="showTeamForm()">Register Team</button>
 
-<!-- admin button stays hidden -->
 <button class="btn" id="adminBtn">Admin</button>
 
 </div>
@@ -184,7 +161,13 @@ Come watch the action live, support teams, and enjoy the atmosphere.
 <input type="email" name="email" placeholder="Email Address" required>
 <input type="tel" name="phone" placeholder="Phone Number" required>
 
-<select name="ticket" id="ticketSelect" required></select>
+<select name="ticket" id="ticketSelect" required>
+  <option value="">Select Category</option>
+  <option value="skill">Skill Showcase</option>
+  <option value="duel">Head-to-Head</option>
+  <option value="7s">Rugby 7s</option>
+  <option value="spectator">Spectator</option>
+</select>
 
 <p class="slots" id="slotsInfo"></p>
 
@@ -210,7 +193,7 @@ Come watch the action live, support teams, and enjoy the atmosphere.
 
 <p class="slots" id="teamSlots">8/8</p>
 
-<button type="submit" id="teamBtn">Pay 5000</button>
+<button type="submit">Pay 5000</button>
 <div class="message" id="teamMsg"></div>
 </form>
 
@@ -220,7 +203,6 @@ Come watch the action live, support teams, and enjoy the atmosphere.
 
 <script>
 
-// NAVIGATION
 function hideAll(){
   document.getElementById("landing").style.display="none";
   document.getElementById("ticketSection").style.display="none";
@@ -230,118 +212,6 @@ function hideAll(){
 function showTicketForm(){ hideAll(); document.getElementById("ticketSection").style.display="flex"; }
 function showTeamForm(){ hideAll(); document.getElementById("teamSection").style.display="flex"; }
 function goHome(){ hideAll(); document.getElementById("landing").style.display="flex"; }
-
-// PAYMENT HANDLER
-async function pollPayment(orderId, successCb, failCb){
-  document.getElementById("paymentOverlay").style.display="flex";
-
-  let tries = 0;
-
-  const interval = setInterval(async ()=>{
-    tries++;
-
-    try{
-      const res = await fetch(`/payment-status?id=${orderId}`);
-      const data = await res.json();
-
-      if(data.status === "success"){
-        clearInterval(interval);
-        document.getElementById("paymentOverlay").style.display="none";
-        successCb(data.ticketUrl);
-      }
-
-      if(data.status === "failed"){
-        clearInterval(interval);
-        document.getElementById("paymentOverlay").style.display="none";
-        failCb();
-      }
-
-    }catch{}
-
-    if(tries > 12){
-      clearInterval(interval);
-      document.getElementById("paymentOverlay").style.display="none";
-      failCb();
-    }
-
-  },5000);
-}
-
-// TICKET
-document.getElementById("ticketForm").addEventListener("submit", async (e)=>{
-  e.preventDefault();
-
-  const msg = document.getElementById("ticketMsg");
-  const btn = document.getElementById("ticketBtn");
-
-  btn.disabled = true;
-  msg.textContent = "Processing...";
-
-  const data = Object.fromEntries(new FormData(e.target));
-
-  const res = await fetch("/register",{
-    method:"POST",
-    headers:{"Content-Type":"application/json"},
-    body:JSON.stringify(data)
-  });
-
-  const result = await res.json();
-
-  if(result.orderId){
-    pollPayment(result.orderId,
-      (ticketUrl)=>{
-        msg.innerHTML = `✅ Success! <a href="${ticketUrl}" target="_blank">Download Ticket</a>`;
-        btn.disabled = false;
-      },
-      ()=>{
-        msg.textContent = "❌ Payment Cancelled";
-        btn.disabled = false;
-        e.target.reset();
-      }
-    );
-  } else {
-    msg.textContent = result.message || "Check phone";
-    btn.disabled = false;
-  }
-});
-
-// TEAM
-document.getElementById("teamForm").addEventListener("submit", async (e)=>{
-  e.preventDefault();
-
-  const msg = document.getElementById("teamMsg");
-  const btn = document.getElementById("teamBtn");
-
-  btn.disabled = true;
-  msg.textContent = "Processing...";
-
-  const data = Object.fromEntries(new FormData(e.target));
-
-  const res = await fetch("/register-team",{
-    method:"POST",
-    headers:{"Content-Type":"application/json"},
-    body:JSON.stringify(data)
-  });
-
-  const result = await res.json();
-
-  if(result.orderId){
-    pollPayment(result.orderId,
-      (ticketUrl)=>{
-        msg.innerHTML = `✅ Success! <a href="${ticketUrl}" target="_blank">Download Ticket</a>`;
-        btn.disabled = false;
-      },
-      ()=>{
-        msg.textContent = "❌ Payment Cancelled";
-        btn.disabled = false;
-        e.target.reset();
-      }
-    );
-  } else {
-    msg.textContent = result.message || "Check phone";
-    btn.disabled = false;
-  }
-});
 
 </script>
 
