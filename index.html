@@ -147,7 +147,7 @@ button{
 <input name="phone" placeholder="Phone Number" required>
 <input name="email" placeholder="Email Address" required>
 
-<p class="slots">⚡ Limited to 8 teams only</p>
+<p class="slots" id="teamSlots">Loading team slots...</p>
 
 <button type="submit" id="teamBtn">Pay 5000</button>
 <div class="message" id="teamMsg"></div>
@@ -234,10 +234,7 @@ function toggleScanner(){
   }
 }
 
-// TICKET LOGIC (unchanged)
-const form = document.getElementById("ticketForm");
-const messageDiv = document.getElementById("ticketMsg");
-const button = document.getElementById("ticketBtn");
+// ================= LIVE TICKET SLOTS =================
 const ticketSelect = document.getElementById("ticketSelect");
 const slotsInfo = document.getElementById("slotsInfo");
 
@@ -245,31 +242,78 @@ let currentSlots = {};
 
 async function loadSlots(){
   try{
+    const selected = ticketSelect.value;
+
     const res = await fetch("/slots");
     const data = await res.json();
+
     currentSlots = data;
 
     ticketSelect.innerHTML = `
       <option value="">Select Ticket</option>
-      <option value="skill_showcase">Skill (${data.skill_showcase})</option>
-      <option value="head_to_head">Head (${data.head_to_head})</option>
-      <option value="spectator">Spectator</option>
+      <option value="skill_showcase">Skill (${data.skill_showcase} left)</option>
+      <option value="head_to_head">Head (${data.head_to_head} left)</option>
+      <option value="spectator">Spectator (Unlimited)</option>
     `;
+
+    if(selected) ticketSelect.value = selected;
+
+    updateSlotText();
+
   }catch{
     slotsInfo.textContent="⚠ Error loading slots";
   }
 }
 
+function updateSlotText(){
+  const val = ticketSelect.value;
+
+  if(val === "spectator"){
+    slotsInfo.textContent = "Unlimited spectators";
+  } 
+  else if(currentSlots[val] !== undefined){
+    slotsInfo.textContent = currentSlots[val] + " slots remaining";
+  } else {
+    slotsInfo.textContent = "";
+  }
+}
+
+ticketSelect.addEventListener("change", updateSlotText);
+setInterval(loadSlots, 5000);
 loadSlots();
 
-// TICKET SUBMIT
-form.addEventListener("submit", async (e)=>{
+// ================= TEAM DISPLAY =================
+const teamSlots = document.getElementById("teamSlots");
+const TEAM_LIMIT = 8;
+
+async function loadTeamSlots(){
+  try{
+    const res = await fetch("/team-slots"); // optional
+    const data = await res.json();
+
+    const remaining = TEAM_LIMIT - (data.registered || 0);
+    teamSlots.textContent = remaining > 0 
+      ? `⚡ ${remaining} team slots remaining`
+      : "❌ Team slots full";
+  }catch{
+    teamSlots.textContent = "⚡ Limited to 8 teams";
+  }
+}
+
+setInterval(loadTeamSlots,5000);
+loadTeamSlots();
+
+// ================= TICKET SUBMIT =================
+document.getElementById("ticketForm").addEventListener("submit", async (e)=>{
   e.preventDefault();
 
-  button.disabled=true;
-  messageDiv.textContent="Processing...";
+  const msg = document.getElementById("ticketMsg");
+  const btn = document.getElementById("ticketBtn");
 
-  const data = Object.fromEntries(new FormData(form));
+  btn.disabled=true;
+  msg.textContent="Processing...";
+
+  const data = Object.fromEntries(new FormData(e.target));
 
   const res = await fetch("/register",{
     method:"POST",
@@ -278,10 +322,10 @@ form.addEventListener("submit", async (e)=>{
   });
 
   const result = await res.json();
-  messageDiv.textContent = result.message || "Check phone";
+  msg.textContent = result.message || "Check phone";
 });
 
-// TEAM SUBMIT
+// ================= TEAM SUBMIT =================
 document.getElementById("teamForm").addEventListener("submit", async (e)=>{
   e.preventDefault();
 
