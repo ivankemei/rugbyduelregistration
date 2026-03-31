@@ -371,188 +371,170 @@ button{
 
 </div>
 </div>
+
 <script>
-// NAV
-function showTicketForm(){hideAll();ticketSection.style.display="flex";}
-function showTeamForm(){hideAll();teamSection.style.display="flex";}
-function showAdminLogin(){hideAll();adminLogin.style.display="flex";}
-function goHome(){
-  hideAll();
-  landing.style.display="flex";
-
-  // stop scanner when leaving admin
-  if(scannerInstance){
-    scannerInstance.stop().catch(()=>{});
-    document.getElementById("reader").style.display="none";
-  }
+function startRegistration(){
+  document.getElementById("landing").style.display="none";
+  document.getElementById("formSection").style.display="flex";
 }
 
-function hideAll(){
-  landing.style.display="none";
-  ticketSection.style.display="none";
-  teamSection.style.display="none";
-  adminLogin.style.display="none";
-  adminDash.style.display="none";
-}
+const form = document.getElementById("ticketForm");
+const messageDiv = document.getElementById("message");
+const button = document.getElementById("payBtn");
+const ticketSelect = document.getElementById("ticketSelect");
+const slotsInfo = document.getElementById("slotsInfo");
 
-// LOAD ONCE
-let loaded=false;
+let currentSlots = {};
 
+// ================= LOAD SLOTS =================
 async function loadSlots(){
-  if(loaded) return;
-  loaded=true;
+  try{
+    const selectedValue = ticketSelect.value; // ✅ SAVE selection
 
-  const res = await fetch("/slots");
-  const data = await res.json();
+    const res = await fetch("/slots");
+    if(!res.ok) throw new Error("Server error");
 
-  ticketSelect.innerHTML = `
-    <option value="">Select</option>
-    <option value="skill_showcase">${data.skill_showcase} slots</option>
-    <option value="head_to_head">${data.head_to_head} slots</option>
-    <option value="spectator">Spectator</option>
-  `;
+    const data = await res.json();
+    currentSlots = data;
+
+    ticketSelect.innerHTML = `
+      <option value="">Select Ticket Type</option>
+      <option value="skill_showcase" ${data.skill_showcase===0?"disabled":""}>
+        Skill Showcase (${data.skill_showcase} left)
+      </option>
+      <option value="head_to_head" ${data.head_to_head===0?"disabled":""}>
+        Head to Head (${data.head_to_head} left)
+      </option>
+      <option value="spectator">
+        Spectator (Unlimited)
+      </option>
+    `;
+
+    // ✅ RESTORE selection
+    if(selectedValue){
+      ticketSelect.value = selectedValue;
+    }
+
+    // ✅ UPDATE SLOT TEXT AGAIN
+    updateSlotText();
+
+  }catch(err){
+    console.error("Slots error:", err);
+
+    ticketSelect.innerHTML = `
+      <option value="">Select Ticket Type</option>
+      <option value="skill_showcase">Skill Showcase</option>
+      <option value="head_to_head">Head to Head</option>
+      <option value="spectator">Spectator</option>
+    `;
+
+    slotsInfo.textContent = "⚠ Unable to load live slots";
+  }
 }
 
-async function loadTeamSlots(){
-  const res = await fetch("/team_slots");
-  const data = await res.json();
-  teamSlots.textContent = data.remaining + " teams left";
+// ================= UPDATE SLOT TEXT =================
+function updateSlotText(){
+  const val = ticketSelect.value;
+
+  if(val === "spectator"){
+    slotsInfo.textContent = "Unlimited spectators";
+  } 
+  else if(currentSlots[val] !== undefined){
+    slotsInfo.textContent = currentSlots[val] + " slots remaining";
+  } else {
+    slotsInfo.textContent = "";
+  }
 }
 
+// ================= EVENTS =================
+ticketSelect.addEventListener("change", updateSlotText);
+
+// refresh slots every 5 seconds
+setInterval(loadSlots, 5000);
 loadSlots();
-loadTeamSlots();
 
-// TICKET
-ticketForm.addEventListener("submit", async (e)=>{
+// ================= SUBMIT =================
+form.addEventListener("submit", async (e)=>{
   e.preventDefault();
 
-  const btn = ticketBtn;
-  btn.disabled=true;
-
-  const data = Object.fromEntries(new FormData(e.target));
-
-  await fetch("/register",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(data)});
-
-  ticketMsg.textContent="Waiting for payment...";
-
-  let tries=0;
-
-  const poll=setInterval(async ()=>{
-    tries++;
-
-    const res = await fetch(`/ticket_status?email=${data.email}`);
-    const status = await res.json();
-
-    if(status.status==="paid"){
-      clearInterval(poll);
-      ticketMsg.textContent="✅ Payment successful";
-    }
-
-    if(status.status==="failed"){
-      clearInterval(poll);
-      ticketMsg.textContent="❌ Payment cancelled";
-      btn.disabled=false;
-    }
-
-    if(tries>20){
-      clearInterval(poll);
-      ticketMsg.textContent="Session expired";
-      btn.disabled=false;
-    }
-
-  },3000);
-});
-
-// TEAM
-teamForm.addEventListener("submit", async (e)=>{
-  e.preventDefault();
-
-  const btn = teamBtn;
-  btn.disabled=true;
-
-  const data = Object.fromEntries(new FormData(e.target));
-
-  await fetch("/register-team",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(data)});
-
-  teamMsg.textContent="Waiting for payment...";
-
-  let tries=0;
-
-  const poll=setInterval(async ()=>{
-    tries++;
-
-    const res = await fetch(`/team_status?email=${data.email}`);
-    const status = await res.json();
-
-    if(status.status==="paid"){
-      clearInterval(poll);
-      teamMsg.textContent="✅ Team Registered";
-    }
-
-    if(status.status==="failed"){
-      clearInterval(poll);
-      teamMsg.textContent="❌ Failed";
-      btn.disabled=false;
-    }
-
-  },3000);
-});
-
-// ADMIN LOGIN (FIXED)
-function loginAdmin(){
-  const pass = document.getElementById("adminPass").value;
-
-  if(pass==="admin123"){
-    hideAll(); // 🔥 ensures users UI disappears fully
-    adminDash.style.display="flex";
-    loadAdmin();
-  }else{
-    alert("Wrong password");
+  if(!ticketSelect.value){
+    messageDiv.textContent = "⚠ Please select a ticket type";
+    return;
   }
-}
 
-// ADMIN DATA
-async function loadAdmin(){
-  const slots = await fetch("/slots").then(r=>r.json());
-  const teams = await fetch("/team_slots").then(r=>r.json());
+  button.disabled = true;
+  form.style.display = "none";
+  messageDiv.textContent = "Sending STK push...";
 
-  adminData.innerHTML = `
-    Skill: ${slots.skill_showcase}<br>
-    Head: ${slots.head_to_head}<br>
-    Teams: ${teams.registered}/8
-  `;
-}
+  const formData = new FormData(form);
+  const data = {
+    fullname: formData.get("fullname"),
+    email: formData.get("email"),
+    phone: formData.get("phone"),
+    ticket: formData.get("ticket")
+  };
 
-// QR SCANNER FIX (toggle + no overlap)
-let scannerInstance=null;
-let scanning=false;
+  try{
+    const response = await fetch("/register",{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify(data)
+    });
 
-function toggleScanner(){
-  const reader = document.getElementById("reader");
+    const result = await response.json();
 
-  if(!scanning){
-    reader.style.display="block";
+    if(!response.ok){
+      throw new Error(result.message || "Registration failed");
+    }
 
-    scannerInstance = new Html5Qrcode("reader");
+    messageDiv.textContent = "Check your phone...";
 
-    scannerInstance.start(
-      { facingMode: "environment" },
-      { fps: 10, qrbox: 250 },
-      async (text)=>{
-        const res = await fetch(`/verify/${text}`);
-        const data = await res.json();
+    let attempts = 0;
 
-        scanResult.textContent = data.valid ? "✅ " + data.name : "❌ Invalid";
+    const poll = setInterval(async ()=>{
+      attempts++;
+
+      const res = await fetch(`/ticket_status?email=${data.email}`);
+      const ticketData = await res.json();
+
+      if(ticketData.status==="paid"){
+        clearInterval(poll);
+        showTicket(ticketData.ticket);
       }
-    );
 
-    scanning=true;
+      if(ticketData.status==="failed"){
+        clearInterval(poll);
+        messageDiv.textContent="❌ Payment cancelled";
+        form.style.display="block";
+        button.disabled=false;
+      }
 
-  }else{
-    scannerInstance.stop();
-    reader.style.display="none";
-    scanning=false;
+      if(attempts>20){
+        clearInterval(poll);
+        messageDiv.textContent="Session expired";
+        form.style.display="block";
+        button.disabled=false;
+      }
+
+    },3000);
+
+  }catch(err){
+    messageDiv.textContent=err.message;
+    form.style.display="block";
+    button.disabled=false;
   }
+});
+
+// ================= SHOW TICKET =================
+function showTicket(ticket){
+  document.getElementById("container").innerHTML=`
+    <h2>🎟 Ticket</h2>
+    <p><b>Name:</b> ${ticket.name}</p>
+    <p><b>ID:</b> ${ticket.id}</p>
+    <p><b>Category:</b> ${ticket.category}</p>
+    <p><b>Amount:</b> Ksh ${ticket.amount}</p>
+    <a href="/download/${ticket.id}">Download Ticket</a>
+  `;
 }
 </script>
 
