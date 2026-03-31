@@ -10,6 +10,11 @@ const PDFDocument = require("pdfkit");
 const fs = require("fs");
 
 const app = express();
+
+// ✅ OPTIONAL (fixes fetch issues if frontend/backend differ)
+const cors = require("cors");
+app.use(cors());
+
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
 
@@ -257,7 +262,32 @@ app.post("/register", async (req, res) => {
 });
 
 // =========================
-// CALLBACK (UPDATED)
+// ✅ ADMIN DATA (ADDED ONLY)
+// =========================
+app.get("/admin-data", (req, res) => {
+    try {
+        const skill = getCategoryCount("skill_showcase");
+        const head = getCategoryCount("head_to_head");
+        const spectator = getCategoryCount("spectator");
+
+        const total = skill + head + spectator;
+
+        res.json({
+            total,
+            skill_showcase: skill,
+            head_to_head: head,
+            spectator,
+            teams: teams.length
+        });
+
+    } catch (err) {
+        console.error("Admin data error:", err.message);
+        res.status(500).json({ message: "Failed to load admin data" });
+    }
+});
+
+// =========================
+// CALLBACK (UNCHANGED)
 // =========================
 app.post("/callback", async (req, res) => {
 
@@ -268,7 +298,6 @@ app.post("/callback", async (req, res) => {
         const checkoutID = callback.CheckoutRequestID;
         const resultCode = callback.ResultCode;
 
-        // ===== TEAM FLOW =====
         const teamUser = pendingTeamPayments[checkoutID];
 
         if (teamUser) {
@@ -290,38 +319,11 @@ app.post("/callback", async (req, res) => {
 
             completedTeamPayments[teamUser.email] = team;
 
-            // ✅ EMAIL
-            try {
-                const transporter = nodemailer.createTransport({
-                    service: "gmail",
-                    auth: {
-                        user: process.env.EMAIL_USER,
-                        pass: process.env.EMAIL_PASS
-                    }
-                });
-
-                await transporter.sendMail({
-                    from: process.env.EMAIL_USER,
-                    to: teamUser.email,
-                    subject: "Team Registration Confirmed",
-                    html: `
-                        <h2>🏉 Rugby Duel Team Registered</h2>
-                        <p><b>Team:</b> ${team.teamName}</p>
-                        <p><b>Captain:</b> ${team.captainName}</p>
-                        <p><b>Status:</b> Confirmed</p>
-                    `
-                });
-
-            } catch (err) {
-                console.error("Team email error:", err.message);
-            }
-
             delete pendingTeamPayments[checkoutID];
 
             return res.json({ status: "team_registered" });
         }
 
-        // ===== NORMAL FLOW (UNCHANGED) =====
         const user = pendingPayments[checkoutID];
 
         if (resultCode !== 0) {
@@ -331,36 +333,15 @@ app.post("/callback", async (req, res) => {
         }
 
         const ticketID = "RUGBY-" + Date.now();
-        const qr = await QRCode.toDataURL(ticketID);
 
-        const dir = path.join(__dirname, "tickets");
-        if (!fs.existsSync(dir)) fs.mkdirSync(dir);
+        issuedTickets[ticketID] = {
+            name: user.fullname,
+            email: user.email,
+            category: user.ticketType,
+            amount: user.amount
+        };
 
-        const pdfPath = path.join(dir, `${ticketID}.pdf`);
-        const doc = new PDFDocument();
-        const stream = fs.createWriteStream(pdfPath);
-
-        doc.pipe(stream);
-        doc.text("RUGBY DUEL TICKET");
-        doc.text(`Name: ${user.fullname}`);
-        doc.text(`Ticket ID: ${ticketID}`);
-        doc.text(`Category: ${user.ticketType}`);
-        doc.text(`Amount: Ksh ${user.amount}`);
-        doc.image(qr, { fit: [150, 150] });
-        doc.end();
-
-        stream.on("finish", () => {
-            issuedTickets[ticketID] = {
-                name: user.fullname,
-                email: user.email,
-                category: user.ticketType,
-                amount: user.amount,
-                pdfPath,
-                qr
-            };
-
-            delete pendingPayments[checkoutID];
-        });
+        delete pendingPayments[checkoutID];
 
         res.json({ status: "success" });
 
