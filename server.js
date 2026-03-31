@@ -11,10 +11,6 @@ const fs = require("fs");
 
 const app = express();
 
-// ✅ OPTIONAL (fixes fetch issues if frontend/backend differ)
-const cors = require("cors");
-app.use(cors());
-
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
 
