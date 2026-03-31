@@ -185,16 +185,75 @@ button{
 
 </div>
 </div>
-
 <script>
-function startRegistration(){
+
+// ================= NAVIGATION =================
+function showTicketForm(){
   document.getElementById("landing").style.display="none";
-  document.getElementById("formSection").style.display="flex";
+  document.getElementById("ticketSection").style.display="flex";
 }
 
+function showTeamForm(){
+  document.getElementById("landing").style.display="none";
+  document.getElementById("teamSection").style.display="flex";
+}
+
+function showAdminLogin(){
+  document.getElementById("landing").style.display="none";
+  document.getElementById("adminLogin").style.display="flex";
+}
+
+function goHome(){
+  document.getElementById("landing").style.display="flex";
+  document.getElementById("ticketSection").style.display="none";
+  document.getElementById("teamSection").style.display="none";
+  document.getElementById("adminLogin").style.display="none";
+  document.getElementById("adminDash").style.display="none";
+}
+
+// ================= ADMIN =================
+function loginAdmin(){
+  const pass = document.getElementById("adminPass").value;
+
+  if(pass === "admin123"){ // 🔑 change password later
+    document.getElementById("adminLogin").style.display="none";
+    document.getElementById("adminDash").style.display="flex";
+  } else {
+    alert("Wrong password");
+  }
+}
+
+// ================= QR SCANNER =================
+let scanner;
+
+function toggleScanner(){
+  const reader = document.getElementById("reader");
+
+  if(reader.style.display === "none"){
+    reader.style.display = "block";
+
+    scanner = new Html5Qrcode("reader");
+    scanner.start(
+      { facingMode: "environment" },
+      { fps: 10, qrbox: 250 },
+      (decodedText) => {
+        document.getElementById("scanResult").textContent = "Scanned: " + decodedText;
+      }
+    );
+
+  } else {
+    reader.style.display = "none";
+    if(scanner){
+      scanner.stop();
+    }
+  }
+}
+
+// ================= EXISTING CODE (UNCHANGED) =================
+
 const form = document.getElementById("ticketForm");
-const messageDiv = document.getElementById("message");
-const button = document.getElementById("payBtn");
+const messageDiv = document.getElementById("ticketMsg");
+const button = document.getElementById("ticketBtn");
 const ticketSelect = document.getElementById("ticketSelect");
 const slotsInfo = document.getElementById("slotsInfo");
 
@@ -203,7 +262,7 @@ let currentSlots = {};
 // ================= LOAD SLOTS =================
 async function loadSlots(){
   try{
-    const selectedValue = ticketSelect.value; // ✅ SAVE selection
+    const selectedValue = ticketSelect.value;
 
     const res = await fetch("/slots");
     if(!res.ok) throw new Error("Server error");
@@ -224,12 +283,10 @@ async function loadSlots(){
       </option>
     `;
 
-    // ✅ RESTORE selection
     if(selectedValue){
       ticketSelect.value = selectedValue;
     }
 
-    // ✅ UPDATE SLOT TEXT AGAIN
     updateSlotText();
 
   }catch(err){
@@ -260,10 +317,8 @@ function updateSlotText(){
   }
 }
 
-// ================= EVENTS =================
 ticketSelect.addEventListener("change", updateSlotText);
 
-// refresh slots every 5 seconds
 setInterval(loadSlots, 5000);
 loadSlots();
 
@@ -341,7 +396,7 @@ form.addEventListener("submit", async (e)=>{
 
 // ================= SHOW TICKET =================
 function showTicket(ticket){
-  document.getElementById("container").innerHTML=`
+  document.getElementById("ticketSection").innerHTML=`
     <h2>🎟 Ticket</h2>
     <p><b>Name:</b> ${ticket.name}</p>
     <p><b>ID:</b> ${ticket.id}</p>
@@ -350,6 +405,7 @@ function showTicket(ticket){
     <a href="/download/${ticket.id}">Download Ticket</a>
   `;
 }
+
 </script>
 
 </body>
