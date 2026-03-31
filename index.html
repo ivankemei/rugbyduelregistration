@@ -92,7 +92,7 @@ button{
   display:none;
 }
 
-/* ================= NEW LOADER ================= */
+/* ✅ LOADING OVERLAY */
 #paymentOverlay{
   position:fixed;
   top:0;
@@ -104,7 +104,6 @@ button{
   justify-content:center;
   align-items:center;
   flex-direction:column;
-  color:white;
   z-index:9999;
 }
 
@@ -121,44 +120,28 @@ button{
   0%{transform:rotate(0deg);}
   100%{transform:rotate(360deg);}
 }
+
 </style>
 </head>
 
 <body>
 
-<!-- NEW PAYMENT OVERLAY -->
+<!-- LOADING OVERLAY -->
 <div id="paymentOverlay">
   <div class="loader"></div>
-  <p id="paymentText" style="margin-top:20px;">Waiting for M-Pesa confirmation...</p>
+  <p id="paymentText" style="color:white;margin-top:15px;">Waiting for M-Pesa...</p>
 </div>
 
-<!-- KEEP ALL YOUR ORIGINAL CONTENT BELOW (UNCHANGED) -->
 <!-- LANDING -->
 <div class="hero" id="landing">
 <h1>🏉 Rugby Duel 2026</h1>
 <p>Ultimate rugby showdown in Eldoret.</p>
-<p><b>Date & Venue:</b> To be confirmed</p>
 
 <div class="categories">
-<div>
-<b>🔥 Skill Showcase</b><br>
-Test your individual rugby skills — speed, agility, ball control, and creativity.
-</div>
-
-<div>
-<b>💥 Head-to-Head</b><br>
-1v1 rugby battles. Strength, strategy, and dominance decide the winner.
-</div>
-
-<div>
-<b>🏉 Rugby 7s</b><br>
-Team-based competition. Register your squad and compete for glory.
-</div>
-
-<div>
-<b>👀 Spectator</b><br>
-Come watch the action live, support teams, and enjoy the atmosphere.
-</div>
+<div><b>🔥 Skill Showcase</b></div>
+<div><b>💥 Head-to-Head</b></div>
+<div><b>🏉 Rugby 7s</b></div>
+<div><b>👀 Spectator</b></div>
 </div>
 
 <button class="btn" onclick="showTicketForm()">Register Ticket</button>
@@ -166,19 +149,70 @@ Come watch the action live, support teams, and enjoy the atmosphere.
 <button class="btn" id="adminBtn" onclick="showAdminLogin()">Admin</button>
 </div>
 
-<!-- (ALL YOUR OTHER HTML REMAINS EXACTLY SAME) -->
-<!-- ... YOUR TICKET FORM, TEAM FORM, ADMIN, ETC ... -->
+<!-- TICKET -->
+<div class="container" id="ticketSection">
+<div class="form-box">
+<h2>Ticket Registration</h2>
+
+<form id="ticketForm">
+<input type="text" name="fullname" placeholder="Full Name" required>
+<input type="email" name="email" placeholder="Email Address" required>
+<input type="tel" name="phone" placeholder="Phone Number" required>
+
+<select name="ticket" id="ticketSelect" required></select>
+
+<p class="slots" id="slotsInfo"></p>
+
+<button type="submit" id="ticketBtn">Pay & Register</button>
+<div class="message" id="ticketMsg"></div>
+</form>
+
+<button onclick="goHome()">⬅ Back</button>
+</div>
+</div>
+
+<!-- TEAM -->
+<div class="container" id="teamSection">
+<div class="form-box">
+<h2>🏉 Team Registration</h2>
+
+<form id="teamForm">
+<input name="teamName" placeholder="Team Name" required>
+<input name="captainName" placeholder="Captain Name" required>
+<input name="phone" placeholder="Phone Number" required>
+<input name="email" placeholder="Email Address" required>
+
+<p class="slots" id="teamSlots"></p>
+
+<button type="submit" id="teamBtn">Pay 5000</button>
+<div class="message" id="teamMsg"></div>
+</form>
+
+<button onclick="goHome()">⬅ Back</button>
+</div>
+</div>
 
 <script>
 
-// ================= PAYMENT FLOW =================
-async function startPaymentPolling(orderId, successCallback, failCallback){
+// NAVIGATION
+function hideAll(){
+  document.getElementById("landing").style.display="none";
+  document.getElementById("ticketSection").style.display="none";
+  document.getElementById("teamSection").style.display="none";
+}
+
+function showTicketForm(){ hideAll(); document.getElementById("ticketSection").style.display="flex"; }
+function showTeamForm(){ hideAll(); document.getElementById("teamSection").style.display="flex"; }
+function goHome(){ hideAll(); document.getElementById("landing").style.display="flex"; }
+
+// ✅ PAYMENT POLLING
+async function pollPayment(orderId, successCb, failCb){
   document.getElementById("paymentOverlay").style.display="flex";
 
-  let attempts = 0;
+  let tries = 0;
 
   const interval = setInterval(async ()=>{
-    attempts++;
+    tries++;
 
     try{
       const res = await fetch(`/payment-status?id=${orderId}`);
@@ -187,36 +221,35 @@ async function startPaymentPolling(orderId, successCallback, failCallback){
       if(data.status === "success"){
         clearInterval(interval);
         document.getElementById("paymentOverlay").style.display="none";
-        successCallback(data.ticketUrl);
+        successCb(data.ticketUrl);
       }
 
       if(data.status === "failed"){
         clearInterval(interval);
         document.getElementById("paymentOverlay").style.display="none";
-        failCallback();
+        failCb();
       }
 
-    }catch(err){}
+    }catch{}
 
-    // timeout after ~60 seconds
-    if(attempts > 12){
+    if(tries > 12){
       clearInterval(interval);
       document.getElementById("paymentOverlay").style.display="none";
-      failCallback();
+      failCb();
     }
 
   },5000);
 }
 
-// ================= TICKET SUBMIT (UPDATED) =================
+// ================= TICKET =================
 document.getElementById("ticketForm").addEventListener("submit", async (e)=>{
   e.preventDefault();
 
   const msg = document.getElementById("ticketMsg");
   const btn = document.getElementById("ticketBtn");
 
-  btn.disabled=true;
-  msg.textContent="Initiating payment...";
+  btn.disabled = true;
+  msg.textContent = "STK Push sent...";
 
   const data = Object.fromEntries(new FormData(e.target));
 
@@ -228,22 +261,25 @@ document.getElementById("ticketForm").addEventListener("submit", async (e)=>{
 
   const result = await res.json();
 
-  // Assume backend returns orderId
   if(result.orderId){
-    startPaymentPolling(result.orderId,
+    pollPayment(result.orderId,
       (ticketUrl)=>{
-        msg.innerHTML = `✅ Payment Successful!<br><a href="${ticketUrl}" target="_blank">Download Ticket</a>`;
+        msg.innerHTML = `✅ Success! <a href="${ticketUrl}" target="_blank">Download Ticket</a>`;
         btn.disabled=false;
       },
       ()=>{
-        msg.textContent = "❌ Payment cancelled. Try again.";
+        msg.textContent="❌ Payment cancelled";
         btn.disabled=false;
+        e.target.reset();
       }
     );
+  } else {
+    msg.textContent = result.message || "Check phone";
+    btn.disabled=false;
   }
 });
 
-// ================= TEAM SUBMIT (UPDATED) =================
+// ================= TEAM =================
 document.getElementById("teamForm").addEventListener("submit", async (e)=>{
   e.preventDefault();
 
@@ -251,7 +287,7 @@ document.getElementById("teamForm").addEventListener("submit", async (e)=>{
   const btn = document.getElementById("teamBtn");
 
   btn.disabled = true;
-  msg.textContent = "Initiating payment...";
+  msg.textContent = "STK Push sent...";
 
   const data = Object.fromEntries(new FormData(e.target));
 
@@ -264,16 +300,20 @@ document.getElementById("teamForm").addEventListener("submit", async (e)=>{
   const result = await res.json();
 
   if(result.orderId){
-    startPaymentPolling(result.orderId,
+    pollPayment(result.orderId,
       (ticketUrl)=>{
-        msg.innerHTML = `✅ Payment Successful!<br><a href="${ticketUrl}" target="_blank">Download Team Ticket</a>`;
+        msg.innerHTML = `✅ Success! <a href="${ticketUrl}" target="_blank">Download Ticket</a>`;
         btn.disabled=false;
       },
       ()=>{
-        msg.textContent = "❌ Payment cancelled. Try again.";
+        msg.textContent="❌ Payment cancelled";
         btn.disabled=false;
+        e.target.reset();
       }
     );
+  } else {
+    msg.textContent = result.message || "Check phone";
+    btn.disabled=false;
   }
 });
 
