@@ -209,7 +209,7 @@ app.post("/register", async (req, res) => {
 
     const prices = {
         skill_showcase: 1000,
-        head_to_head: 1000,
+        head_to_head: 5,
         spectator: 5
     };
 
