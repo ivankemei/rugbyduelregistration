@@ -47,7 +47,7 @@ body{
   text-align:left;
 }
 
-/* ✅ SLOT DISPLAY STYLE */
+/* SLOT DISPLAY */
 .slot-count{
   margin-top:6px;
   font-weight:bold;
@@ -104,33 +104,6 @@ button{
 .slots{font-size:14px;color:#1a237e;margin-top:5px;}
 .message{margin-top:10px;font-weight:bold;}
 
-#paymentOverlay{
-  position:fixed;
-  top:0;
-  left:0;
-  width:100%;
-  height:100%;
-  background:rgba(0,0,0,0.85);
-  display:none;
-  justify-content:center;
-  align-items:center;
-  flex-direction:column;
-  z-index:9999;
-}
-
-.loader{
-  border:6px solid #ccc;
-  border-top:6px solid #1a237e;
-  border-radius:50%;
-  width:60px;
-  height:60px;
-  animation:spin 1s linear infinite;
-}
-
-@keyframes spin{
-  0%{transform:rotate(0deg);}
-  100%{transform:rotate(360deg);}
-}
 </style>
 </head>
 
@@ -157,7 +130,7 @@ Test your individual rugby skills.
 <div>
 <b>🏉 Rugby 7s</b><br>
 Team competition.
-<div class="slot-count">Unlimited</div>
+<div class="slot-count">Register in team form</div>
 </div>
 
 <div>
@@ -192,6 +165,7 @@ Watch live.
   <option value="spectator">Spectator</option>
 </select>
 
+<!-- ✅ LIVE SLOT DISPLAY AFTER SELECTION -->
 <p class="slots" id="slotsInfo"></p>
 
 <button type="submit" id="ticketBtn">Pay & Register</button>
@@ -238,33 +212,83 @@ function showTeamForm(){ hideAll(); document.getElementById("teamSection").style
 function goHome(){ hideAll(); document.getElementById("landing").style.display="flex"; }
 
 /* =========================
-   ✅ FETCH SLOT DATA
+   ✅ LIVE SLOT FETCH
 ========================= */
+let slotData = {skill:32, duel:32}; // fallback
+
 async function loadSlots(){
   try{
     const res = await fetch("/slots");
     const data = await res.json();
-
-    // EXPECTED BACKEND RESPONSE:
-    // { skill: 20, duel: 12 }
-
-    document.getElementById("skillSlots").textContent =
-      `${data.skill}/32 tickets left`;
-
-    document.getElementById("duelSlots").textContent =
-      `${data.duel}/32 tickets left`;
-
-  }catch(err){
-    console.log("Slot fetch failed", err);
-  }
+    slotData = data;
+  }catch(e){}
 }
 
-// RUN ON LOAD
 loadSlots();
 
 /* =========================
-   (KEEP YOUR PAYMENT CODE HERE)
+   ✅ SHOW SLOT AFTER SELECT
 ========================= */
+document.getElementById("ticketSelect").addEventListener("change", function(){
+  const val = this.value;
+  const info = document.getElementById("slotsInfo");
+
+  if(val === "skill"){
+    info.textContent = `${slotData.skill}/32 tickets left`;
+  }
+
+  else if(val === "duel"){
+    info.textContent = `${slotData.duel}/32 tickets left`;
+  }
+
+  else if(val === "spectator"){
+    info.textContent = "Unlimited tickets available";
+  }
+
+  else {
+    info.textContent = "";
+  }
+});
+
+/* =========================
+   PAYMENT (UNCHANGED LOGIC)
+========================= */
+document.getElementById("ticketForm").addEventListener("submit", async (e)=>{
+  e.preventDefault();
+
+  const msg = document.getElementById("ticketMsg");
+  const btn = document.getElementById("ticketBtn");
+
+  btn.disabled = true;
+  msg.textContent = "Processing...";
+
+  const data = Object.fromEntries(new FormData(e.target));
+
+  const res = await fetch("/register",{
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify(data)
+  });
+
+  const result = await res.json();
+
+  if(result.orderId){
+    pollPayment(result.orderId,
+      (ticketUrl)=>{
+        msg.innerHTML = `✅ Success! <a href="${ticketUrl}" target="_blank">Download Ticket</a>`;
+        btn.disabled = false;
+      },
+      ()=>{
+        msg.textContent = "❌ Payment Cancelled";
+        btn.disabled = false;
+        e.target.reset();
+      }
+    );
+  } else {
+    msg.textContent = result.message || "Check phone";
+    btn.disabled = false;
+  }
+});
 
 </script>
 
