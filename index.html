@@ -15,9 +15,22 @@ body{
   color:white;
 }
 
+/* ✅ FIX: allow sections to actually display */
+.hero, .container{
+  display:flex;
+}
+
+/* keep container hidden initially */
+.container{
+  display:none;
+  min-height:100vh;
+  justify-content:center;
+  align-items:center;
+}
+
+/* ensure landing works properly */
 .hero{
   min-height:100vh;
-  display:flex;
   flex-direction:column;
   justify-content:center;
   align-items:center;
@@ -49,11 +62,9 @@ body{
   cursor:pointer;
 }
 
-.container{
-  display:none;
-  min-height:100vh;
-  justify-content:center;
-  align-items:center;
+/* FIX: admin button hidden */
+#adminBtn{
+  display:none !important;
 }
 
 .form-box{
@@ -82,15 +93,9 @@ button{
 .slots{font-size:14px;color:#1a237e;margin-top:5px;}
 .message{margin-top:10px;font-weight:bold;}
 
-.admin-flex{
-  display:flex;
-  flex-direction:column;
-  gap:15px;
-}
-
 #reader{ display:none; }
 
-/* ✅ LOADING OVERLAY */
+/* LOADING OVERLAY */
 #paymentOverlay{
   position:fixed;
   top:0;
@@ -123,19 +128,22 @@ button{
 
 <body>
 
-<!-- ✅ LOADING OVERLAY -->
+<!-- LOADING -->
 <div id="paymentOverlay">
   <div class="loader"></div>
   <p style="margin-top:15px;">Waiting for M-Pesa...</p>
 </div>
 
-<!-- LANDING (UNCHANGED) -->
+<!-- LANDING -->
 <div class="hero" id="landing">
+
 <h1>🏉 Rugby Duel 2026</h1>
 <p>Ultimate rugby showdown in Eldoret.</p>
 <p><b>Date & Venue:</b> To be confirmed</p>
 
+<!-- ✅ FIX: ensure categories visible -->
 <div class="categories">
+
 <div>
 <b>🔥 Skill Showcase</b><br>
 Test your individual rugby skills — speed, agility, ball control, and creativity.
@@ -155,14 +163,18 @@ Team-based competition. Register your squad and compete for glory.
 <b>👀 Spectator</b><br>
 Come watch the action live, support teams, and enjoy the atmosphere.
 </div>
+
 </div>
 
 <button class="btn" onclick="showTicketForm()">Register Ticket</button>
 <button class="btn" onclick="showTeamForm()">Register Team</button>
-<button class="btn" id="adminBtn" onclick="showAdminLogin()">Admin</button>
+
+<!-- admin button stays hidden -->
+<button class="btn" id="adminBtn">Admin</button>
+
 </div>
 
-<!-- TICKET (UNCHANGED) -->
+<!-- TICKET -->
 <div class="container" id="ticketSection">
 <div class="form-box">
 <h2>Ticket Registration</h2>
@@ -184,7 +196,7 @@ Come watch the action live, support teams, and enjoy the atmosphere.
 </div>
 </div>
 
-<!-- TEAM (UNCHANGED) -->
+<!-- TEAM -->
 <div class="container" id="teamSection">
 <div class="form-box">
 
@@ -208,7 +220,7 @@ Come watch the action live, support teams, and enjoy the atmosphere.
 
 <script>
 
-// NAVIGATION (UNCHANGED)
+// NAVIGATION
 function hideAll(){
   document.getElementById("landing").style.display="none";
   document.getElementById("ticketSection").style.display="none";
@@ -219,7 +231,7 @@ function showTicketForm(){ hideAll(); document.getElementById("ticketSection").s
 function showTeamForm(){ hideAll(); document.getElementById("teamSection").style.display="flex"; }
 function goHome(){ hideAll(); document.getElementById("landing").style.display="flex"; }
 
-// ================= PAYMENT HANDLER =================
+// PAYMENT HANDLER
 async function pollPayment(orderId, successCb, failCb){
   document.getElementById("paymentOverlay").style.display="flex";
 
@@ -255,7 +267,7 @@ async function pollPayment(orderId, successCb, failCb){
   },5000);
 }
 
-// ================= TICKET SUBMIT (ONLY CHANGE HERE) =================
+// TICKET
 document.getElementById("ticketForm").addEventListener("submit", async (e)=>{
   e.preventDefault();
 
@@ -293,7 +305,7 @@ document.getElementById("ticketForm").addEventListener("submit", async (e)=>{
   }
 });
 
-// ================= TEAM SUBMIT (ONLY CHANGE HERE) =================
+// TEAM
 document.getElementById("teamForm").addEventListener("submit", async (e)=>{
   e.preventDefault();
 
