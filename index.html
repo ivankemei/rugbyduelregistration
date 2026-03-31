@@ -1,264 +1,183 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Rugby Duel Event</title>
-
-<script src="https://unpkg.com/html5-qrcode"></script>
-
-<style>
-*{margin:0;padding:0;box-sizing:border-box;font-family:Arial;}
-
-body{
-  background: linear-gradient(135deg,#0f2027,#203a43,#2c5364);
-  color:white;
-}
-
-.hero{
-  min-height:100vh;
-  display:flex;
-  flex-direction:column;
-  justify-content:center;
-  align-items:center;
-  text-align:center;
-  padding:20px;
-}
-
-.categories{
-  margin:20px 0;
-  width:100%;
-  max-width:600px;
-}
-
-.categories div{
-  margin:10px 0;
-  padding:12px;
-  background:rgba(255,255,255,0.1);
-  border-radius:8px;
-  text-align:left;
-}
-
-.btn{
-  margin:10px;
-  padding:14px 25px;
-  border:none;
-  border-radius:8px;
-  background:#1a237e;
-  color:white;
-  cursor:pointer;
-}
-
-.container{
-  display:none;
-  min-height:100vh;
-  justify-content:center;
-  align-items:center;
-}
-
-.form-box{
-  background:white;
-  color:black;
-  padding:30px;
-  border-radius:12px;
-  width:95%;
-  max-width:420px;
-}
-
-input,select{
-  width:100%;
-  padding:12px;
-  margin:10px 0;
-}
-
-button{
-  width:40%;
-  padding:13px;
-  background:#1a237e;
-  color:white;
-  border:none;
-}
-
-.slots{font-size:14px;color:#1a237e;margin-top:5px;}
-.message{margin-top:10px;font-weight:bold;}
-
-.admin-flex{
-  display:flex;
-  flex-direction:column;
-  gap:15px;
-}
-
-#reader{
-  display:none;
-}
-
-/* ================= SPINNER (ADDED) ================= */
-#spinnerOverlay{
-  position:fixed;
-  top:0;
-  left:0;
-  width:100%;
-  height:100%;
-  background:rgba(0,0,0,0.7);
-  display:none;
-  justify-content:center;
-  align-items:center;
-  flex-direction:column;
-  z-index:9999;
-}
-
-.loader{
-  border:6px solid #f3f3f3;
-  border-top:6px solid #1a237e;
-  border-radius:50%;
-  width:60px;
-  height:60px;
-  animation:spin 1s linear infinite;
-}
-
-@keyframes spin{
-  0%{transform:rotate(0deg);}
-  100%{transform:rotate(360deg);}
-}
-
-#cancelBtn{
-  margin-top:20px;
-  background:red;
-}
-</style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rugby Duel Event</title>
+  <script src="https:                                   
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box;font-family:Arial;}
+    body{ 
+      background: linear-gradient(135deg,                         
+      color:white;
+    }
+    .hero{
+      min-height:100vh;
+      display:flex;
+      flex-direction:column;
+      justify-content:center;
+      align-items:center;
+      text-align:center;
+      padding:20px;
+    }
+    .categories{
+      margin:20px 0;
+      width:100%;
+      max-width:600px;
+    }
+    .categories div{
+      margin:10px 0;
+      padding:12px;
+      background:rgba(255,255,255,0.1);
+      border-radius:8px;
+      text-align:left;
+    }
+    .btn{
+      margin:10px;
+      padding:14px 25px;
+      border:none;
+      border-radius:8px;
+      background:        
+      color:white;
+      cursor:pointer;
+    }
+    .container{
+      display:none;
+      min-height:100vh;
+      justify-content:center;
+      align-items:center;
+    }
+    .form-box{
+      background:white;
+      color:black;
+      padding:30px;
+      border-radius:12px;
+      width:95%;
+      max-width:420px;
+    }
+    input,select{
+      width:100%;
+      padding:12px;
+      margin:10px 0;
+    }
+    button{
+      width:40%;
+      padding:13px;
+      background:        
+      color:white;
+      border:none;
+    }
+    .slots{font-size:14px;color:                        
+    .message{margin-top:10px;font-weight:bold;}
+    .admin-flex{
+      display:flex;
+      flex-direction:column;
+      gap:15px;
+    }
+            
+      display:none;
+    }
+    .loading-spinner {
+      border: 5px solid         
+      border-top: 5px solid         
+      border-radius: 50%;
+      width: 30px;
+      height: 30px;
+      animation: spin 1s linear infinite;
+      display: none;
+      margin: 10px auto;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+  </style>
 </head>
-
 <body>
-
-<!-- SPINNER (ADDED) -->
-<div id="spinnerOverlay">
-  <div class="loader"></div>
-  <button id="cancelBtn" onclick="cancelRequest()">Cancel</button>
-</div>
-
-<!-- LANDING -->
-<div class="hero" id="landing">
-<h1>🏉 Rugby Duel 2026</h1>
-<p>Ultimate rugby showdown in Eldoret.</p>
-<p><b>Date & Venue:</b> To be confirmed</p>
-
-<div class="categories">
-<div>
-<b>🔥 Skill Showcase</b><br>
-Test your individual rugby skills — speed, agility, ball control, and creativity.
-</div>
-
-<div>
-<b>💥 Head-to-Head</b><br>
-1v1 rugby battles. Strength, strategy, and dominance decide the winner.
-</div>
-
-<div>
-<b>🏉 Rugby 7s</b><br>
-Team-based competition. Register your squad and compete for glory.
-</div>
-
-<div>
-<b>👀 Spectator</b><br>
-Come watch the action live, support teams, and enjoy the atmosphere.
-</div>
-</div>
-
-<button class="btn" onclick="showTicketForm()">Register Ticket</button>
-<button class="btn" onclick="showTeamForm()">Register Team</button>
-<button class="btn" id="adminBtn" onclick="showAdminLogin()">Admin</button>
-</div>
-
-<!-- (ALL YOUR OTHER HTML REMAINS EXACTLY THE SAME) -->
-<!-- I did NOT remove anything from your code -->
-
-<script>
-
-// ================= SPINNER LOGIC (ADDED) =================
-let currentController = null;
-
-function showSpinner(){
-  document.getElementById("spinnerOverlay").style.display = "flex";
-}
-
-function hideSpinner(){
-  document.getElementById("spinnerOverlay").style.display = "none";
-}
-
-function cancelRequest(){
-  if(currentController){
-    currentController.abort();
-    currentController = null;
-  }
-  hideSpinner();
-  document.getElementById("ticketBtn").disabled = false;
-  document.getElementById("teamBtn").disabled = false;
-}
-
-// ================= MODIFY FETCH (ADDED WRAPPER) =================
-async function safeFetch(url, options = {}){
-  currentController = new AbortController();
-  options.signal = currentController.signal;
-
-  try{
-    const res = await fetch(url, options);
-    return res;
-  } finally {
-    currentController = null;
-  }
-}
-
-// ================= TICKET SUBMIT (UPDATED - spinner only added) =================
-document.getElementById("ticketForm").addEventListener("submit", async (e)=>{
-  e.preventDefault();
-
-  const msg = document.getElementById("ticketMsg");
-  const btn = document.getElementById("ticketBtn");
-
-  btn.disabled=true;
-  showSpinner(); // ADDED
-  msg.textContent="Processing...";
-
-  const data = Object.fromEntries(new FormData(e.target));
-
-  const res = await safeFetch("/register",{
-    method:"POST",
-    headers:{"Content-Type":"application/json"},
-    body:JSON.stringify(data)
-  });
-
-  const result = await res.json();
-
-  hideSpinner(); // ADDED
-  msg.textContent = result.message || "Check phone";
-});
-
-// ================= TEAM SUBMIT (UPDATED) =================
-document.getElementById("teamForm").addEventListener("submit", async (e)=>{
-  e.preventDefault();
-
-  const msg = document.getElementById("teamMsg");
-  const btn = document.getElementById("teamBtn");
-
-  btn.disabled = true;
-  showSpinner(); // ADDED
-  msg.textContent = "Processing...";
-
-  const data = Object.fromEntries(new FormData(e.target));
-
-  const res = await safeFetch("/register-team",{
-    method:"POST",
-    headers:{"Content-Type":"application/json"},
-    body:JSON.stringify(data)
-  });
-
-  const result = await res.json();
-
-  hideSpinner(); // ADDED
-  msg.textContent = result.message || "Check phone";
-});
-
-</script>
-
-</body>
-</html>
+  <!-- LANDING -->
+  <div class="hero" id="landing">
+    <h1>🏉 Rugby Duel 2026</h1>
+    <p>Ultimate rugby showdown in Eldoret.</p>
+    <p><b>Date & Venue:</b> To be confirmed</p>
+    <div class="categories">
+      <div>
+        <b>🔥 Skill Showcase</b><br>
+        Test your individual rugby skills — speed, agility, ball control, and creativity.
+      </div>
+      <div>
+        <b>💥 Head-to-Head</b><br>
+        1v1 rugby battles. Strength, strategy, and dominance decide the winner.
+      </div>
+      <div>
+        <b>🏉 Rugby 7s</b><br>
+        Team-based competition. Register your squad and compete for glory.
+      </div>
+      <div>
+        <b>👀 Spectator</b><br>
+        Come watch the action live, support teams, and enjoy the atmosphere.
+      </div>
+    </div>
+    <button class="btn" onclick="showTicketForm()">Register Ticket</button>
+    <button class="btn" onclick="showTeamForm()">Register Team</button>
+    <button class="btn" id="adminBtn" onclick="showAdminLogin()">Admin</button>
+  </div>
+  <!-- TICKET -->
+  <div class="container" id="ticketSection">
+    <div class="form-box">
+      <h2>Ticket Registration</h2>
+      <form id="ticketForm">
+        <input type="text" name="fullname" placeholder="Full Name" required>
+        <input type="email" name="email" placeholder="Email Address" required>
+        <input type="tel" name="phone" placeholder="Phone Number" required>
+        <select name="ticket" id="ticketSelect" required></select>
+        <p class="slots" id="slotsInfo"></p>
+        <div class="loading-spinner" id="loading-spinner"></div>
+        <button type="submit" id="ticketBtn">Pay & Register</button>
+        <div class="message" id="ticketMsg"></div>
+      </form>
+      <button onclick="goHome()">⬅ Back</button>
+    </div>
+  </div>
+  <!-- TEAM -->
+  <div class="container" id="teamSection">
+    <div class="form-box">
+      <h2>🏉 Team Registration</h2>
+      <form id="teamForm">
+        <input name="teamName" placeholder="Team Name" required>
+        <input name="captainName" placeholder="Captain Name" required>
+        <input name="phone" placeholder="Phone Number" required>
+        <input name="email" placeholder="Email Address" required>
+        <p class="slots" id="teamSlots">Loading team slots...</p>
+        <div class="loading-spinner" id="loading-spinner-team"></div>
+        <button type="submit" id="teamBtn">Pay 5000</button>
+        <div class="message" id="teamMsg"></div>
+      </form>
+      <button onclick="goHome()">⬅ Back</button>
+    </div>
+  </div>
+  <!-- ADMIN LOGIN -->
+  <div class="container" id="adminLogin">
+    <div class="form-box">
+      <h2>Admin Login</h2>
+      <input id="adminPass" type="password" placeholder="Password">
+      <button onclick="loginAdmin()">Login</button>
+    </div>
+  </div>
+  <!-- ADMIN DASHBOARD -->
+  <div class="container" id="adminDash">
+    <div class="form-box admin-flex">
+      <h2>Dashboard</h2>
+      <p id="adminData">Loading data...</p>
+      <button onclick="toggleScanner()">📷 Scan Ticket</button>
+      <div id="reader"></div>
+      <p id="scanResult"></p>
+      <button onclick="logoutAdmin()">Logout</button>
+    </div>
+  </div>
+  <script>
+                  
+    let isAdminLoggedIn = false;
+                                     
+    document.getElementById("adminBtn").style.display = "none";
+    // SECRET KEY (change this)
+    const ADMIN
