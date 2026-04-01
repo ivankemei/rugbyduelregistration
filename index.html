@@ -103,31 +103,50 @@ button{
 
 <body>
 
+<!-- LANDING -->
 <div class="hero" id="landing">
 <h1>🏉 Rugby Duel 2026</h1>
 <p>Ultimate rugby showdown in Eldoret.</p>
 <p><b>Date & Venue:</b> To be confirmed</p>
 
 <div class="categories">
-<div><b>🔥 Skill Showcase</b><br>Test your individual rugby skills — speed, agility, ball control, and creativity.</div>
-<div><b>💥 Head-to-Head</b><br>1v1 rugby battles. Strength, strategy, and dominance decide the winner.</div>
-<div><b>🏉 Rugby 7s</b><br>Team-based competition. Register your squad and compete for glory.</div>
-<div><b>👀 Spectator</b><br>Come watch the action live, support teams, and enjoy the atmosphere.</div>
+<div>
+<b>🔥 Skill Showcase</b><br>
+Test your individual rugby skills.
+</div>
+
+<div>
+<b>💥 Head-to-Head</b><br>
+1v1 rugby battles.
+</div>
+
+<div>
+<b>🏉 Rugby 7s</b><br>
+Team-based competition.
+</div>
+
+<div>
+<b>👀 Spectator</b><br>
+Come watch live.
+</div>
 </div>
 
 <button class="btn" onclick="showTicketForm()">Register Ticket</button>
 <button class="btn" onclick="showTeamForm()">Register Team</button>
 </div>
 
+<!-- TICKET -->
 <div class="container" id="ticketSection">
 <div class="form-box">
 <h2>Ticket Registration</h2>
 
 <form id="ticketForm">
-<input type="text" name="fullname" required>
-<input type="email" name="email" required>
-<input type="tel" name="phone" required>
+<input type="text" name="fullname" placeholder="Full Name" required>
+<input type="email" name="email" placeholder="Email Address" required>
+<input type="tel" name="phone" placeholder="Phone Number" required>
+
 <select name="ticket" id="ticketSelect" required></select>
+
 <p class="slots" id="slotsInfo"></p>
 
 <button type="submit" id="ticketBtn">Pay & Register</button>
@@ -138,15 +157,17 @@ button{
 </div>
 </div>
 
+<!-- TEAM -->
 <div class="container" id="teamSection">
 <div class="form-box">
+
 <h2>🏉 Team Registration</h2>
 
 <form id="teamForm">
-<input name="teamName" required>
-<input name="captainName" required>
-<input name="phone" required>
-<input name="email" required>
+<input name="teamName" placeholder="Team Name" required>
+<input name="captainName" placeholder="Captain Name" required>
+<input name="phone" placeholder="Phone Number" required>
+<input name="email" placeholder="Email Address" required>
 
 <p class="slots" id="teamSlots">Loading team slots...</p>
 
@@ -166,29 +187,39 @@ function hideAll(){
   document.getElementById("ticketSection").style.display="none";
   document.getElementById("teamSection").style.display="none";
 }
+
 function showTicketForm(){ hideAll(); document.getElementById("ticketSection").style.display="flex"; }
 function showTeamForm(){ hideAll(); document.getElementById("teamSection").style.display="flex"; }
-function goHome(){ hideAll(); document.getElementById("landing").style.display="flex"; }
 
-// 🔥 IMPROVED PAYMENT MONITOR
+function goHome(){
+  hideAll();
+  document.getElementById("landing").style.display="flex";
+}
+
+// 🔥 NEW: DOWNLOAD FUNCTION
+function downloadTicket(email){
+  window.location.href = `/download-ticket?email=${email}`;
+}
+
+// PAYMENT MONITOR (UPDATED ONLY HERE)
 async function monitorPayment(email, msg, btn, form){
-  let attempts = 0;
+  let tries = 0;
 
   const interval = setInterval(async ()=>{
-    attempts++;
+    tries++;
 
     try{
-      const res = await fetch(`/payment-status?email=${encodeURIComponent(email)}`);
+      const res = await fetch(`/payment-status?email=${email}`);
       const data = await res.json();
 
-      console.log("Payment check:", data);
-
       if(data.status === "success"){
-        msg.innerHTML = "✅ Payment Successful!";
+        msg.innerHTML = `
+          ✅ Payment Successful!<br><br>
+          <button onclick="downloadTicket('${email}')">🎟 Download Ticket</button>
+        `;
         btn.disabled = false;
         form.reset();
         clearInterval(interval);
-        return;
       }
 
       if(data.status === "failed"){
@@ -196,57 +227,90 @@ async function monitorPayment(email, msg, btn, form){
         btn.disabled = false;
         form.reset();
         clearInterval(interval);
-        return;
       }
 
-    }catch(err){
-      console.log("Polling error:", err.message);
-    }
+    }catch{}
 
-    if(attempts >= 25){
-      msg.innerHTML = "⚠ Payment not confirmed. Please try again.";
+    if(tries > 20){
+      msg.innerHTML = "⚠ Payment timeout. Try again.";
       btn.disabled = false;
       clearInterval(interval);
     }
 
-  }, 3000);
+  },3000);
 }
 
-// ================= SLOTS =================
+// ================= REST SAME =================
+
 const ticketSelect = document.getElementById("ticketSelect");
 const slotsInfo = document.getElementById("slotsInfo");
 
 let currentSlots = {};
 
 async function loadSlots(){
-  const res = await fetch("/slots");
-  const data = await res.json();
+  try{
+    const selected = ticketSelect.value;
 
-  currentSlots = data;
+    const res = await fetch("/slots");
+    const data = await res.json();
 
-  ticketSelect.innerHTML = `
-    <option value="">Select Ticket</option>
-    <option value="skill_showcase">Skill (${data.skill_showcase} left)</option>
-    <option value="head_to_head">Head (${data.head_to_head} left)</option>
-    <option value="spectator">Spectator (Unlimited)</option>
-  `;
+    currentSlots = data;
+
+    ticketSelect.innerHTML = `
+      <option value="">Select Ticket</option>
+      <option value="skill_showcase">Skill (${data.skill_showcase} left)</option>
+      <option value="head_to_head">Head (${data.head_to_head} left)</option>
+      <option value="spectator">Spectator (Unlimited)</option>
+    `;
+
+    if(selected) ticketSelect.value = selected;
+
+    updateSlotText();
+
+  }catch{
+    slotsInfo.textContent="⚠ Error loading slots";
+  }
 }
-setInterval(loadSlots,5000);
+
+function updateSlotText(){
+  const val = ticketSelect.value;
+
+  if(val === "spectator"){
+    slotsInfo.textContent = "Unlimited spectators";
+  } 
+  else if(currentSlots[val] !== undefined){
+    slotsInfo.textContent = currentSlots[val] + " slots remaining";
+  } else {
+    slotsInfo.textContent = "";
+  }
+}
+
+ticketSelect.addEventListener("change", updateSlotText);
+setInterval(loadSlots, 5000);
 loadSlots();
 
-// ================= TEAM =================
-async function loadTeamSlots(){
-  const res = await fetch("/team-slots");
-  const data = await res.json();
+// TEAM
+const teamSlots = document.getElementById("teamSlots");
+const TEAM_LIMIT = 8;
 
-  const remaining = 8 - (data.registered || 0);
-  document.getElementById("teamSlots").textContent =
-    remaining > 0 ? `${remaining} team slots left` : "FULL";
+async function loadTeamSlots(){
+  try{
+    const res = await fetch("/team-slots");
+    const data = await res.json();
+
+    const remaining = TEAM_LIMIT - (data.registered || 0);
+    teamSlots.textContent = remaining > 0 
+      ? `⚡ ${remaining} team slots remaining`
+      : "❌ Team slots full";
+  }catch{
+    teamSlots.textContent = "⚡ Limited to 8 teams";
+  }
 }
+
 setInterval(loadTeamSlots,5000);
 loadTeamSlots();
 
-// ================= SUBMIT =================
+// SUBMITS
 document.getElementById("ticketForm").addEventListener("submit", async (e)=>{
   e.preventDefault();
 
@@ -255,7 +319,10 @@ document.getElementById("ticketForm").addEventListener("submit", async (e)=>{
 
   btn.disabled=true;
 
-  msg.innerHTML = `<div class="loader"></div><p>Waiting for M-Pesa...</p>`;
+  msg.innerHTML = `
+    <div class="loader"></div>
+    <p>Waiting for M-Pesa payment...</p>
+  `;
 
   const data = Object.fromEntries(new FormData(e.target));
 
@@ -276,7 +343,10 @@ document.getElementById("teamForm").addEventListener("submit", async (e)=>{
 
   btn.disabled = true;
 
-  msg.innerHTML = `<div class="loader"></div><p>Waiting for M-Pesa...</p>`;
+  msg.innerHTML = `
+    <div class="loader"></div>
+    <p>Waiting for M-Pesa payment...</p>
+  `;
 
   const data = Object.fromEntries(new FormData(e.target));
 
@@ -292,4 +362,4 @@ document.getElementById("teamForm").addEventListener("submit", async (e)=>{
 </script>
 
 </body>
-</html>
+  </html>
