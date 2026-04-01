@@ -23,7 +23,6 @@ const {
   SHORTCODE,
   PASSKEY,
   CALLBACK_URL,
-  TILL_NUMBER,
   ADMIN_PHONE,
   AT_API_KEY,
   AT_USERNAME
@@ -41,7 +40,7 @@ let pendingTeamPayments = {};
 let failedTeamPayments = {};
 let completedTeamPayments = {};
 
-const TEAM_PRICE = 5;
+const TEAM_PRICE = 5000;
 const TEAM_LIMIT = 8;
 
 // =========================
@@ -64,7 +63,7 @@ async function getAccessToken() {
 }
 
 // =========================
-// 📩 SMS FUNCTION
+// SMS
 // =========================
 async function sendSMS(message) {
   try {
@@ -88,7 +87,7 @@ async function sendSMS(message) {
 }
 
 // =========================
-// SLOTS (FIXED)
+// SLOTS
 // =========================
 const LIMITS = {
   skill_showcase: 32,
@@ -146,14 +145,14 @@ app.get("/team_status", (req, res) => {
   }
 
   if (completedTeamPayments[email]) {
-    return res.json({ status: "success", team: completedTeamPayments[email] });
+    return res.json({ status: "success" });
   }
 
   return res.json({ status: "pending" });
 });
 
 // =========================
-// REGISTER TEAM (🔥 FIXED)
+// REGISTER TEAM
 // =========================
 app.post("/register-team", async (req, res) => {
 
@@ -185,7 +184,7 @@ app.post("/register-team", async (req, res) => {
         TransactionType: "CustomerBuyGoodsOnline",
         Amount: TEAM_PRICE,
         PartyA: phone,
-        PartyB: 6691976, // ✅ FIXED
+        PartyB: 6691976,
         PhoneNumber: phone,
         CallBackURL: CALLBACK_URL,
         AccountReference: "TEAM ENTRY",
@@ -244,7 +243,7 @@ app.post("/register", async (req, res) => {
         TransactionType: "CustomerBuyGoodsOnline",
         Amount: amount,
         PartyA: phone,
-        PartyB: 6691976, 
+        PartyB: 6691976,
         PhoneNumber: phone,
         CallBackURL: CALLBACK_URL,
         AccountReference: "RUGBY DUEL",
@@ -298,7 +297,7 @@ app.post("/callback", async (req, res) => {
     teams.push(team);
     completedTeamPayments[user.email] = team;
 
-    await sendSMS(`🏉 NEW TEAM: ${team.teamName} | Captain: ${team.captainName}`);
+    await sendSMS(`🏉 TEAM: ${team.teamName} | ${team.captainName}`);
 
     delete pendingTeamPayments[checkoutID];
 
@@ -324,7 +323,7 @@ app.post("/callback", async (req, res) => {
       amount: user.amount
     };
 
-    await sendSMS(`🎟 NEW TICKET: ${user.fullname} | ${user.ticketType}`);
+    await sendSMS(`🎟 ${user.fullname} | ${user.ticketType}`);
 
     delete pendingPayments[checkoutID];
 
@@ -332,6 +331,68 @@ app.post("/callback", async (req, res) => {
   }
 
   res.json({ status: "unknown" });
+});
+
+// =========================
+// 🎟 DOWNLOAD TICKET
+// =========================
+app.get("/download-ticket", async (req, res) => {
+
+  const email = req.query.email;
+
+  const entry = Object.entries(issuedTickets)
+    .find(([id, t]) => t.email === email);
+
+  if (!entry) return res.status(404).send("Ticket not found");
+
+  const [ticketID, ticket] = entry;
+
+  const qr = await QRCode.toDataURL(ticketID);
+
+  const doc = new PDFDocument();
+
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", `attachment; filename=${ticketID}.pdf`);
+
+  doc.pipe(res);
+
+  doc.text("RUGBY DUEL TICKET");
+  doc.text(ticket.name);
+  doc.text(ticket.category);
+  doc.text(ticketID);
+
+  doc.image(Buffer.from(qr.split(",")[1], "base64"), { width: 150 });
+
+  doc.end();
+});
+
+// =========================
+// 🏉 DOWNLOAD TEAM TICKET (FIXED)
+// =========================
+app.get("/download-team-ticket", async (req, res) => {
+
+  const email = req.query.email;
+  const team = completedTeamPayments[email];
+
+  if (!team) return res.status(404).send("Team not found");
+
+  const qr = await QRCode.toDataURL(team.id);
+
+  const doc = new PDFDocument();
+
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", `attachment; filename=${team.id}.pdf`);
+
+  doc.pipe(res);
+
+  doc.text("RUGBY DUEL TEAM");
+  doc.text(`Team: ${team.teamName}`);
+  doc.text(`Captain: ${team.captainName}`);
+  doc.text(`ID: ${team.id}`);
+
+  doc.image(Buffer.from(qr.split(",")[1], "base64"), { width: 150 });
+
+  doc.end();
 });
 
 // =========================
