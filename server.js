@@ -4,10 +4,8 @@ const express = require("express");
 const axios = require("axios");
 const bodyParser = require("body-parser");
 const QRCode = require("qrcode");
-const nodemailer = require("nodemailer");
 const path = require("path");
 const PDFDocument = require("pdfkit");
-const fs = require("fs");
 
 const app = express();
 
@@ -17,7 +15,7 @@ app.use(bodyParser.json());
 const PORT = process.env.PORT || 3000;
 
 // =========================
-// ENV VARIABLES
+// ENV
 // =========================
 const consumerKey = process.env.CONSUMER_KEY;
 const consumerSecret = process.env.CONSUMER_SECRET;
@@ -35,10 +33,11 @@ const LIMITS = {
 };
 
 // =========================
-// TEAM SYSTEM
+// STORAGE
 // =========================
-const TEAM_LIMIT = 8;
-const TEAM_PRICE = 5000;
+let pendingPayments = {};
+let issuedTickets = {};
+let failedPayments = {};
 
 let teams = [];
 let pendingTeamPayments = {};
@@ -46,48 +45,40 @@ let failedTeamPayments = {};
 let completedTeamPayments = {};
 
 // =========================
-let pendingPayments = {};
-let issuedTickets = {};
-let failedPayments = {};
-
-// =========================
 app.get("/", (req, res) => {
     res.sendFile(path.join(__dirname, "index.html"));
 });
 
 // =========================
-// COUNT FUNCTION
-// =========================
-function getCategoryCount(category) {
-    return Object.values(issuedTickets).filter(t => t.category === category).length;
-}
-
-// =========================
-// ✅ PAYMENT STATUS (🔥 FIX)
+// PAYMENT STATUS (FIXED)
 // =========================
 app.get("/payment-status", (req, res) => {
 
     const email = req.query.email;
 
-    // ❌ Failed
     if (failedPayments[email]) {
         delete failedPayments[email];
         return res.json({ status: "failed" });
     }
 
-    // ✅ Success
-    const ticket = Object.values(issuedTickets).find(t => t.email === email);
+    const ticketEntry = Object.entries(issuedTickets)
+        .find(([id, t]) => t.email === email);
 
-    if (ticket) {
-        return res.json({ status: "success", ticket });
+    if (ticketEntry) {
+        const [ticketID, ticket] = ticketEntry;
+
+        return res.json({
+            status: "success",
+            ticketID,
+            ticket
+        });
     }
 
-    // ⏳ Still waiting
     return res.json({ status: "pending" });
 });
 
 // =========================
-// TEAM STATUS (ALREADY GOOD)
+// TEAM STATUS
 // =========================
 app.get("/team_status", (req, res) => {
 
@@ -111,28 +102,28 @@ app.get("/team_status", (req, res) => {
 // =========================
 // SLOTS
 // =========================
+function getCategoryCount(category) {
+    return Object.values(issuedTickets)
+        .filter(t => t.category === category).length;
+}
+
 app.get("/slots", (req, res) => {
-    const remaining = {
+    res.json({
         skill_showcase: Math.max(LIMITS.skill_showcase - getCategoryCount("skill_showcase"), 0),
         head_to_head: Math.max(LIMITS.head_to_head - getCategoryCount("head_to_head"), 0)
-    };
-    res.json(remaining);
+    });
 });
 
 // =========================
 // TEAM SLOTS
 // =========================
-function getTeamSlots() {
-    return {
-        total: TEAM_LIMIT,
-        registered: teams.length,
-        remaining: Math.max(TEAM_LIMIT - teams.length, 0),
-        teams
-    };
-}
+const TEAM_LIMIT = 8;
 
-app.get("/team_slots", (req, res) => res.json(getTeamSlots()));
-app.get("/team-slots", (req, res) => res.json(getTeamSlots()));
+app.get("/team-slots", (req, res) => {
+    res.json({
+        registered: teams.length
+    });
+});
 
 // =========================
 // ACCESS TOKEN
@@ -149,65 +140,7 @@ async function getAccessToken() {
 }
 
 // =========================
-// TEAM REGISTER
-// =========================
-app.post("/register-team", async (req, res) => {
-
-    let { teamName, captainName, phone, email } = req.body;
-
-    if (!teamName || !captainName || !phone || !email) {
-        return res.status(400).json({ message: "All fields required" });
-    }
-
-    if (teams.length >= TEAM_LIMIT) {
-        return res.status(400).json({ message: "All team slots are taken" });
-    }
-
-    if (phone.startsWith("07")) phone = "254" + phone.substring(1);
-    if (phone.startsWith("+254")) phone = phone.substring(1);
-
-    try {
-        const token = await getAccessToken();
-
-        const timestamp = new Date().toISOString().replace(/[^0-9]/g, "").slice(0, -3);
-        const password = Buffer.from(shortcode + passkey + timestamp).toString("base64");
-
-        const response = await axios.post(
-            "https://api.safaricom.co.ke/mpesa/stkpush/v1/processrequest",
-            {
-                BusinessShortCode: shortcode,
-                Password: password,
-                Timestamp: timestamp,
-                TransactionType: "CustomerBuyGoodsOnline",
-                Amount: TEAM_PRICE,
-                PartyA: phone,
-                PartyB: "6691976",
-                PhoneNumber: phone,
-                CallBackURL: callbackURL,
-                AccountReference: "TEAM ENTRY",
-                TransactionDesc: "Team Registration"
-            },
-            { headers: { Authorization: `Bearer ${token}` } }
-        );
-
-        const checkoutID = response.data.CheckoutRequestID;
-
-        pendingTeamPayments[checkoutID] = {
-            teamName,
-            captainName,
-            phone,
-            email
-        };
-
-        res.json({ message: "STK push sent for team" });
-
-    } catch (error) {
-        res.status(500).json({ message: "Team payment failed." });
-    }
-});
-
-// =========================
-// REGISTER (TICKET)
+// REGISTER TICKET
 // =========================
 app.post("/register", async (req, res) => {
 
@@ -268,7 +201,7 @@ app.post("/register", async (req, res) => {
 // =========================
 // CALLBACK
 // =========================
-app.post("/callback", async (req, res) => {
+app.post("/callback", (req, res) => {
 
     try {
         const callback = req.body?.Body?.stkCallback;
@@ -277,59 +210,81 @@ app.post("/callback", async (req, res) => {
         const checkoutID = callback.CheckoutRequestID;
         const resultCode = callback.ResultCode;
 
-        // TEAM
-        if (pendingTeamPayments[checkoutID]) {
-            const teamUser = pendingTeamPayments[checkoutID];
+        const user = pendingPayments[checkoutID];
 
-            if (resultCode !== 0) {
-                failedTeamPayments[teamUser.email] = true;
-                delete pendingTeamPayments[checkoutID];
-                return res.json({ status: "failed" });
-            }
+        if (!user) return res.json({ status: "not_found" });
 
-            const team = {
-                id: "TEAM-" + Date.now(),
-                teamName: teamUser.teamName,
-                captainName: teamUser.captainName,
-                phone: teamUser.phone
-            };
-
-            teams.push(team);
-            completedTeamPayments[teamUser.email] = team;
-
-            delete pendingTeamPayments[checkoutID];
-
-            return res.json({ status: "team_registered" });
-        }
-
-        // TICKET
-        if (pendingPayments[checkoutID]) {
-            const user = pendingPayments[checkoutID];
-
-            if (resultCode !== 0) {
-                failedPayments[user.email] = true;
-                delete pendingPayments[checkoutID];
-                return res.json({ status: "failed" });
-            }
-
-            const ticketID = "RUGBY-" + Date.now();
-
-            issuedTickets[ticketID] = {
-                name: user.fullname,
-                email: user.email,
-                category: user.ticketType,
-                amount: user.amount
-            };
-
+        if (resultCode !== 0) {
+            failedPayments[user.email] = true;
             delete pendingPayments[checkoutID];
-
-            return res.json({ status: "success" });
+            return res.json({ status: "failed" });
         }
 
-        res.json({ status: "unknown" });
+        const ticketID = "RUGBY-" + Date.now();
+
+        issuedTickets[ticketID] = {
+            name: user.fullname,
+            email: user.email,
+            category: user.ticketType,
+            amount: user.amount
+        };
+
+        delete pendingPayments[checkoutID];
+
+        res.json({ status: "success" });
 
     } catch (err) {
         res.json({ status: "error" });
+    }
+});
+
+// =========================
+// 🎟 DOWNLOAD TICKET (🔥 MAIN FIX)
+// =========================
+app.get("/download-ticket", async (req, res) => {
+
+    try {
+        const email = req.query.email;
+
+        const ticketEntry = Object.entries(issuedTickets)
+            .find(([id, t]) => t.email === email);
+
+        if (!ticketEntry) {
+            return res.status(404).send("Ticket not found");
+        }
+
+        const [ticketID, ticket] = ticketEntry;
+
+        const qr = await QRCode.toDataURL(ticketID);
+
+        const doc = new PDFDocument();
+
+        res.setHeader("Content-Type", "application/pdf");
+        res.setHeader("Content-Disposition", `attachment; filename=${ticketID}.pdf`);
+
+        doc.pipe(res);
+
+        doc.fontSize(20).text("🏉 Rugby Duel Ticket", { align: "center" });
+        doc.moveDown();
+
+        doc.text(`Name: ${ticket.name}`);
+        doc.text(`Email: ${ticket.email}`);
+        doc.text(`Category: ${ticket.category}`);
+        doc.text(`Ticket ID: ${ticketID}`);
+        doc.moveDown();
+
+        const qrImage = qr.replace(/^data:image\/png;base64,/, "");
+        const qrBuffer = Buffer.from(qrImage, "base64");
+
+        doc.image(qrBuffer, { fit: [150,150], align: "center" });
+
+        doc.moveDown();
+        doc.text("Show this QR at entry", { align: "center" });
+
+        doc.end();
+
+    } catch (err) {
+        res.status(500).send("Error generating ticket");
     }
 });
 
