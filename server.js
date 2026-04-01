@@ -41,7 +41,7 @@ let pendingTeamPayments = {};
 let failedTeamPayments = {};
 let completedTeamPayments = {};
 
-const TEAM_PRICE = 5000;
+const TEAM_PRICE = 5;
 const TEAM_LIMIT = 8;
 
 // =========================
