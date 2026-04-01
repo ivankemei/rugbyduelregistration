@@ -82,14 +82,22 @@ button{
 .slots{font-size:14px;color:#1a237e;margin-top:5px;}
 .message{margin-top:10px;font-weight:bold;}
 
-.admin-flex{
-  display:flex;
-  flex-direction:column;
-  gap:15px;
+#reader{display:none;}
+
+/* LOADER */
+.loader{
+  border:4px solid #f3f3f3;
+  border-top:4px solid #1a237e;
+  border-radius:50%;
+  width:25px;
+  height:25px;
+  animation:spin 1s linear infinite;
+  margin-top:10px;
 }
 
-#reader{
-  display:none;
+@keyframes spin{
+  0%{transform:rotate(0deg);}
+  100%{transform:rotate(360deg);}
 }
 </style>
 </head>
@@ -126,7 +134,6 @@ Come watch the action live, support teams, and enjoy the atmosphere.
 
 <button class="btn" onclick="showTicketForm()">Register Ticket</button>
 <button class="btn" onclick="showTeamForm()">Register Team</button>
-<button class="btn" id="adminBtn" onclick="showAdminLogin()">Admin</button>
 </div>
 
 <!-- TICKET -->
@@ -173,133 +180,60 @@ Come watch the action live, support teams, and enjoy the atmosphere.
 </div>
 </div>
 
-<!-- ADMIN LOGIN -->
-<div class="container" id="adminLogin">
-<div class="form-box">
-<h2>Admin Login</h2>
-<input id="adminPass" type="password" placeholder="Password">
-<button onclick="loginAdmin()">Login</button>
-</div>
-</div>
-
-<!-- ADMIN DASHBOARD -->
-<div class="container" id="adminDash">
-<div class="form-box admin-flex">
-<h2>Dashboard</h2>
-<p id="adminData">Loading data...</p>
-
-<button onclick="toggleScanner()">📷 Scan Ticket</button>
-<div id="reader"></div>
-<p id="scanResult"></p>
-
-<button onclick="logoutAdmin()">Logout</button>
-</div>
-</div>
-
 <script>
-
-// ADMIN STATE
-let isAdminLoggedIn = false;
-
-// 🔒 HIDE ADMIN BUTTON ON LOAD
-document.getElementById("adminBtn").style.display = "none";
-
-// SECRET KEY (change this)
-const ADMIN_KEY = "showadmin";
-
-// UNLOCK ADMIN BUTTON (type ?admin=showadmin in URL)
-if(window.location.search.includes("admin=" + ADMIN_KEY)){
-  document.getElementById("adminBtn").style.display = "block";
-}
 
 // NAVIGATION
 function hideAll(){
   document.getElementById("landing").style.display="none";
   document.getElementById("ticketSection").style.display="none";
   document.getElementById("teamSection").style.display="none";
-  document.getElementById("adminLogin").style.display="none";
-  document.getElementById("adminDash").style.display="none";
 }
 
 function showTicketForm(){ hideAll(); document.getElementById("ticketSection").style.display="flex"; }
 function showTeamForm(){ hideAll(); document.getElementById("teamSection").style.display="flex"; }
-function showAdminLogin(){ hideAll(); document.getElementById("adminLogin").style.display="flex"; }
 
 function goHome(){
   hideAll();
   document.getElementById("landing").style.display="flex";
 }
 
-// ADMIN LOGIN
-function loginAdmin(){
-  const pass = document.getElementById("adminPass").value;
+// ================= PAYMENT MONITOR =================
+async function monitorPayment(email, msg, btn, form){
+  let tries = 0;
 
-  if(pass === "admin123"){
-    isAdminLoggedIn = true;
+  const interval = setInterval(async ()=>{
+    tries++;
 
-    hideAll();
-    document.getElementById("adminDash").style.display="flex";
+    try{
+      const res = await fetch(`/payment-status?email=${email}`);
+      const data = await res.json();
 
-    loadAdminData();
-
-  } else {
-    alert("Wrong password");
-  }
-}
-
-// LOGOUT
-function logoutAdmin(){
-  isAdminLoggedIn = false;
-  goHome();
-}
-
-// ================= ADMIN DATA =================
-async function loadAdminData(){
-  try{
-    const res = await fetch("/admin-data");
-    const data = await res.json();
-
-    document.getElementById("adminData").innerHTML = `
-      👥 Total Registrations: ${data.total || 0}<br>
-      🔥 Skill Showcase: ${data.skill_showcase || 0}<br>
-      💥 Head-to-Head: ${data.head_to_head || 0}<br>
-      👀 Spectators: ${data.spectator || 0}<br>
-      🏉 Teams: ${data.teams || 0}
-    `;
-  }catch{
-    document.getElementById("adminData").textContent = "⚠ Unable to load data";
-  }
-}
-
-setInterval(()=>{
-  if(isAdminLoggedIn){
-    loadAdminData();
-  }
-},5000);
-
-// QR
-let scanner;
-function toggleScanner(){
-  const reader = document.getElementById("reader");
-
-  if(reader.style.display === "none"){
-    reader.style.display = "block";
-
-    scanner = new Html5Qrcode("reader");
-    scanner.start(
-      { facingMode: "environment" },
-      { fps: 10, qrbox: 250 },
-      (decodedText) => {
-        document.getElementById("scanResult").textContent = decodedText;
+      if(data.status === "success"){
+        msg.innerHTML = "✅ Payment Successful!";
+        btn.disabled = false;
+        form.reset();
+        clearInterval(interval);
       }
-    );
-  } else {
-    reader.style.display = "none";
-    if(scanner) scanner.stop();
-  }
+
+      if(data.status === "failed"){
+        msg.innerHTML = "❌ Payment Cancelled";
+        btn.disabled = false;
+        form.reset();
+        clearInterval(interval);
+      }
+
+    }catch{}
+
+    if(tries > 20){
+      msg.innerHTML = "⚠ Payment timeout. Try again.";
+      btn.disabled = false;
+      clearInterval(interval);
+    }
+
+  },3000);
 }
 
-// ================= LIVE TICKET SLOTS =================
+// ================= SLOTS =================
 const ticketSelect = document.getElementById("ticketSelect");
 const slotsInfo = document.getElementById("slotsInfo");
 
@@ -347,7 +281,7 @@ ticketSelect.addEventListener("change", updateSlotText);
 setInterval(loadSlots, 5000);
 loadSlots();
 
-// ================= TEAM DISPLAY =================
+// ================= TEAM SLOTS =================
 const teamSlots = document.getElementById("teamSlots");
 const TEAM_LIMIT = 8;
 
@@ -376,18 +310,21 @@ document.getElementById("ticketForm").addEventListener("submit", async (e)=>{
   const btn = document.getElementById("ticketBtn");
 
   btn.disabled=true;
-  msg.textContent="Processing...";
+
+  msg.innerHTML = `
+    <div class="loader"></div>
+    <p>Waiting for M-Pesa payment...</p>
+  `;
 
   const data = Object.fromEntries(new FormData(e.target));
 
-  const res = await fetch("/register",{
+  await fetch("/register",{
     method:"POST",
     headers:{"Content-Type":"application/json"},
     body:JSON.stringify(data)
   });
 
-  const result = await res.json();
-  msg.textContent = result.message || "Check phone";
+  monitorPayment(data.email, msg, btn, e.target);
 });
 
 // ================= TEAM SUBMIT =================
@@ -398,21 +335,24 @@ document.getElementById("teamForm").addEventListener("submit", async (e)=>{
   const btn = document.getElementById("teamBtn");
 
   btn.disabled = true;
-  msg.textContent = "Processing...";
+
+  msg.innerHTML = `
+    <div class="loader"></div>
+    <p>Waiting for M-Pesa payment...</p>
+  `;
 
   const data = Object.fromEntries(new FormData(e.target));
 
-  const res = await fetch("/register-team",{
+  await fetch("/register-team",{
     method:"POST",
     headers:{"Content-Type":"application/json"},
     body:JSON.stringify(data)
   });
 
-  const result = await res.json();
-  msg.textContent = result.message || "Check phone";
+  monitorPayment(data.email, msg, btn, e.target);
 });
 
 </script>
 
 </body>
-</html>
+  </html>
