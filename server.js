@@ -185,7 +185,7 @@ app.post("/register-team", async (req, res) => {
         TransactionType: "CustomerBuyGoodsOnline",
         Amount: TEAM_PRICE,
         PartyA: phone,
-        PartyB: TILL_NUMBER, // ✅ FIXED
+        PartyB: 6691976, // ✅ FIXED
         PhoneNumber: phone,
         CallBackURL: CALLBACK_URL,
         AccountReference: "TEAM ENTRY",
@@ -244,7 +244,7 @@ app.post("/register", async (req, res) => {
         TransactionType: "CustomerBuyGoodsOnline",
         Amount: amount,
         PartyA: phone,
-        PartyB: TILL_NUMBER,
+        PartyB: 6691976, 
         PhoneNumber: phone,
         CallBackURL: CALLBACK_URL,
         AccountReference: "RUGBY DUEL",
