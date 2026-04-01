@@ -35,7 +35,7 @@ const LIMITS = {
 };
 
 // =========================
-// TEAM SYSTEM (UPDATED 🔥)
+// TEAM SYSTEM
 // =========================
 const TEAM_LIMIT = 8;
 const TEAM_PRICE = 5000;
@@ -43,7 +43,7 @@ const TEAM_PRICE = 5000;
 let teams = [];
 let pendingTeamPayments = {};
 let failedTeamPayments = {};
-let completedTeamPayments = {}; // ✅ NEW
+let completedTeamPayments = {};
 
 // =========================
 let pendingPayments = {};
@@ -63,7 +63,53 @@ function getCategoryCount(category) {
 }
 
 // =========================
-// SLOTS ENDPOINT
+// ✅ PAYMENT STATUS (🔥 FIX)
+// =========================
+app.get("/payment-status", (req, res) => {
+
+    const email = req.query.email;
+
+    // ❌ Failed
+    if (failedPayments[email]) {
+        delete failedPayments[email];
+        return res.json({ status: "failed" });
+    }
+
+    // ✅ Success
+    const ticket = Object.values(issuedTickets).find(t => t.email === email);
+
+    if (ticket) {
+        return res.json({ status: "success", ticket });
+    }
+
+    // ⏳ Still waiting
+    return res.json({ status: "pending" });
+});
+
+// =========================
+// TEAM STATUS (ALREADY GOOD)
+// =========================
+app.get("/team_status", (req, res) => {
+
+    const email = req.query.email;
+
+    if (failedTeamPayments[email]) {
+        delete failedTeamPayments[email];
+        return res.json({ status: "failed" });
+    }
+
+    if (completedTeamPayments[email]) {
+        return res.json({
+            status: "paid",
+            team: completedTeamPayments[email]
+        });
+    }
+
+    res.json({ status: "pending" });
+});
+
+// =========================
+// SLOTS
 // =========================
 app.get("/slots", (req, res) => {
     const remaining = {
@@ -89,7 +135,21 @@ app.get("/team_slots", (req, res) => res.json(getTeamSlots()));
 app.get("/team-slots", (req, res) => res.json(getTeamSlots()));
 
 // =========================
-// TEAM REGISTER (STK)
+// ACCESS TOKEN
+// =========================
+async function getAccessToken() {
+    const auth = Buffer.from(`${consumerKey}:${consumerSecret}`).toString("base64");
+
+    const response = await axios.get(
+        "https://api.safaricom.co.ke/oauth/v1/generate?grant_type=client_credentials",
+        { headers: { Authorization: `Basic ${auth}` } }
+    );
+
+    return response.data.access_token;
+}
+
+// =========================
+// TEAM REGISTER
 // =========================
 app.post("/register-team", async (req, res) => {
 
@@ -101,14 +161,6 @@ app.post("/register-team", async (req, res) => {
 
     if (teams.length >= TEAM_LIMIT) {
         return res.status(400).json({ message: "All team slots are taken" });
-    }
-
-    const exists = teams.find(
-        t => t.teamName.toLowerCase() === teamName.toLowerCase()
-    );
-
-    if (exists) {
-        return res.status(400).json({ message: "Team already registered" });
     }
 
     if (phone.startsWith("07")) phone = "254" + phone.substring(1);
@@ -150,48 +202,12 @@ app.post("/register-team", async (req, res) => {
         res.json({ message: "STK push sent for team" });
 
     } catch (error) {
-        console.error("TEAM STK ERROR:", error.response?.data || error.message);
         res.status(500).json({ message: "Team payment failed." });
     }
 });
 
 // =========================
-async function getAccessToken() {
-    const auth = Buffer.from(`${consumerKey}:${consumerSecret}`).toString("base64");
-
-    const response = await axios.get(
-        "https://api.safaricom.co.ke/oauth/v1/generate?grant_type=client_credentials",
-        { headers: { Authorization: `Basic ${auth}` } }
-    );
-
-    return response.data.access_token;
-}
-
-// =========================
-// TEAM STATUS (NEW ✅)
-// =========================
-app.get("/team_status", (req, res) => {
-
-    const email = req.query.email;
-
-    if (failedTeamPayments[email]) {
-        delete failedTeamPayments[email];
-        return res.json({ status: "failed" });
-    }
-
-    if (completedTeamPayments[email]) {
-        const team = completedTeamPayments[email];
-        return res.json({
-            status: "paid",
-            team
-        });
-    }
-
-    res.json({ status: "pending" });
-});
-
-// =========================
-// REGISTER (UNCHANGED)
+// REGISTER (TICKET)
 // =========================
 app.post("/register", async (req, res) => {
 
@@ -199,13 +215,6 @@ app.post("/register", async (req, res) => {
 
     if (phone.startsWith("07")) phone = "254" + phone.substring(1);
     if (phone.startsWith("+254")) phone = phone.substring(1);
-
-    const currentCount = getCategoryCount(ticketType);
-    const limit = LIMITS[ticketType];
-
-    if (currentCount >= limit) {
-        return res.status(400).json({ message: "Category is full" });
-    }
 
     const prices = {
         skill_showcase: 1000,
@@ -252,38 +261,12 @@ app.post("/register", async (req, res) => {
         res.json({ message: "STK push sent" });
 
     } catch (error) {
-        console.error("STK ERROR:", error.response?.data || error.message);
         res.status(500).json({ message: "Payment failed." });
     }
 });
 
 // =========================
-// ✅ ADMIN DATA (ADDED ONLY)
-// =========================
-app.get("/admin-data", (req, res) => {
-    try {
-        const skill = getCategoryCount("skill_showcase");
-        const head = getCategoryCount("head_to_head");
-        const spectator = getCategoryCount("spectator");
-
-        const total = skill + head + spectator;
-
-        res.json({
-            total,
-            skill_showcase: skill,
-            head_to_head: head,
-            spectator,
-            teams: teams.length
-        });
-
-    } catch (err) {
-        console.error("Admin data error:", err.message);
-        res.status(500).json({ message: "Failed to load admin data" });
-    }
-});
-
-// =========================
-// CALLBACK (UNCHANGED)
+// CALLBACK
 // =========================
 app.post("/callback", async (req, res) => {
 
@@ -294,9 +277,9 @@ app.post("/callback", async (req, res) => {
         const checkoutID = callback.CheckoutRequestID;
         const resultCode = callback.ResultCode;
 
-        const teamUser = pendingTeamPayments[checkoutID];
-
-        if (teamUser) {
+        // TEAM
+        if (pendingTeamPayments[checkoutID]) {
+            const teamUser = pendingTeamPayments[checkoutID];
 
             if (resultCode !== 0) {
                 failedTeamPayments[teamUser.email] = true;
@@ -312,7 +295,6 @@ app.post("/callback", async (req, res) => {
             };
 
             teams.push(team);
-
             completedTeamPayments[teamUser.email] = team;
 
             delete pendingTeamPayments[checkoutID];
@@ -320,29 +302,33 @@ app.post("/callback", async (req, res) => {
             return res.json({ status: "team_registered" });
         }
 
-        const user = pendingPayments[checkoutID];
+        // TICKET
+        if (pendingPayments[checkoutID]) {
+            const user = pendingPayments[checkoutID];
 
-        if (resultCode !== 0) {
-            if (user) failedPayments[user.email] = true;
+            if (resultCode !== 0) {
+                failedPayments[user.email] = true;
+                delete pendingPayments[checkoutID];
+                return res.json({ status: "failed" });
+            }
+
+            const ticketID = "RUGBY-" + Date.now();
+
+            issuedTickets[ticketID] = {
+                name: user.fullname,
+                email: user.email,
+                category: user.ticketType,
+                amount: user.amount
+            };
+
             delete pendingPayments[checkoutID];
-            return res.json({ status: "failed" });
+
+            return res.json({ status: "success" });
         }
 
-        const ticketID = "RUGBY-" + Date.now();
-
-        issuedTickets[ticketID] = {
-            name: user.fullname,
-            email: user.email,
-            category: user.ticketType,
-            amount: user.amount
-        };
-
-        delete pendingPayments[checkoutID];
-
-        res.json({ status: "success" });
+        res.json({ status: "unknown" });
 
     } catch (err) {
-        console.error("Callback Error:", err.message);
         res.json({ status: "error" });
     }
 });
