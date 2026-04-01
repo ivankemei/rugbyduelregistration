@@ -221,9 +221,9 @@ app.post("/register", async (req, res) => {
   if (phone.startsWith("+254")) phone = phone.substring(1);
 
   const prices = {
-    skill_showcase: 5,
-    head_to_head: 5,
-    spectator: 5
+    skill_showcase: 1000,
+    head_to_head: 1000,
+    spectator: 500
   };
 
   const amount = prices[ticketType] || 50;
